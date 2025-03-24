@@ -5,8 +5,17 @@ project(cosmic)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Special handling for OpenMP on macOS
-# Configure OpenMP
+# Set optimization flags
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
+
+# Set output directories
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
+
+# Add executables
+add_executable(cosmic src/bh_gl_omp.cpp)
+add_executable(cosmic_cpu src/bh_cpu.cpp)  # Add your second cpp file here
+
+# Configure OpenMP for macOS
 if(APPLE)
     set(CMAKE_C_COMPILER clang)
     set(CMAKE_CXX_COMPILER clang++)
@@ -26,7 +35,6 @@ if(APPLE)
     endif()
 endif()
 
-
 # Find required packages
 find_package(OpenMP REQUIRED)
 find_package(OpenGL REQUIRED)
@@ -36,7 +44,7 @@ find_package(glfw3 REQUIRED)
 add_library(glad STATIC external/src/glad.c)
 target_include_directories(glad PUBLIC external)
 
-# Set Homebrew paths for Mac
+# glfw3 lib
 if(APPLE)
     set(HOMEBREW_PATH /opt/homebrew)
     set(GLFW_DIR ${HOMEBREW_PATH}/lib/cmake/glfw3)
@@ -47,20 +55,20 @@ if(APPLE)
     link_directories(${HOMEBREW_PATH}/lib)
 endif()
 
-# Set output directories
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bin)
-
-# Add executable
-add_executable(cosmic src/bh_gl_omp.cpp)
-
-# Add include directories
+# include directories
 target_include_directories(cosmic PUBLIC include/cosmic)
 target_include_directories(cosmic PUBLIC external)
+target_include_directories(cosmic_cpu PUBLIC include/cosmic)
+target_include_directories(cosmic_cpu PUBLIC external)
 
 # Link all libraries
 target_link_libraries(cosmic PRIVATE
     glad
     glfw
     OpenGL::GL
+    OpenMP::OpenMP_CXX
+)
+
+target_link_libraries(cosmic_cpu PRIVATE
     OpenMP::OpenMP_CXX
 )
