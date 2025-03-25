@@ -1,12 +1,31 @@
-cmake_minimum_required(VERSION 3.31)
+cmake_minimum_required(VERSION 3.2)
 project(cosmic)
+
+# Option to choose compiler (default to GCC)
+option(USE_CLANG "Build with Clang compiler" OFF)
+
+# Set compiler based on option
+if(USE_CLANG)
+    set(CMAKE_C_COMPILER clang)
+    set(CMAKE_CXX_COMPILER clang++)
+    message(STATUS "Using Clang compiler")
+else()
+    set(CMAKE_C_COMPILER gcc)
+    set(CMAKE_CXX_COMPILER g++)
+    message(STATUS "Using GCC compiler")
+endif()
 
 # C++ standard
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Set optimization flags
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -fopenmp")
+
+if(UNIX AND NOT APPLE)
+    # Modern OpenGL preference
+    set(OpenGL_GL_PREFERENCE "GLVND")
+endif()
 
 # Set output directories
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)

@@ -32,7 +32,7 @@ public:
   template <typename F, typename StopCond1, typename StopCond2>
   std::vector<double> integrate(const F &f, const StopCond1 &stop1, const StopCond2 &stop2, double x0, 
                                 const std::vector<double> &y0,
-                                bool dense_output = false,
+                                bool dense_output,
                                 const std::vector<double> &x_out = {}) {
     // clear the arrays so that we start fresh every time we call this function
     xs.clear();
@@ -72,34 +72,14 @@ public:
       // Accept the step if the scalar error is below 1, otherwise reject it and
       // do not move forward
       if (err < 1.0) {
-        if (dense_output) {
-          // Compute dense output coefficients
-          compute_dense_rs(y_next, y, h);
-
-          // Loop through the output array and interpolate the values
-          while (x_out[xout_idx] < x + h && xout_idx < x_out.size()) {
-            double x_out_val = x_out[xout_idx];
-            double th = (x_out_val - x) / h;
-            if (th < 0.0) { // If the initial x_out value is less than x, set th to 0
-              th = 0.0;
-            }
-            for (int i = 0; i < n_eq; i++) {
-              y_out[i] = r1[i] + th * (r2[i] + (1.0 - th) * (r3[i] + th * (r4[i] + (1.0 - th) * r5[i])));
-            }
-            xs.push_back(x_out_val);
-            result.push_back(y_out);
-            xout_idx++;
-          }
-
-          x += h;
-        } else {
+        
           x += h;
           // This is what we do when not using dense output
           hs.push_back(h);
           xs.push_back(x);
           result.push_back(y_next);
 
-        }
+        
         k1 = k7;
         // store the current error as err_prev
         err_prev = err;
@@ -126,12 +106,11 @@ public:
       // std::cout << "x = " << x << ", h = " << h << ", err = " << err << std::endl;
     }
     if (stop1(x, y)){
-      brightness.push_back(1);
+      brightness = true;
     } else {
-      brightness.push_back(0);
+      brightness = false;
     }
 
-    
     return y_next;
   }
 
@@ -199,18 +178,18 @@ public:
     return std::sqrt(err / n_eq);
   }
 
-  void compute_dense_rs(const std::vector<double> &y_next, const std::vector<double> &y,
-                        double h) {
-    // Compute the coefficients r1, r2, r3, r4, r5
-    for (int i = 0; i < n_eq; i++) {
-      r1[i] = y[i];
-      r2[i] = y_next[i] - y[i];
-      r3[i] = y[i] + h * k1[i] - y_next[i];
-      r4[i] = 2.0 * (y_next[i] - y[i]) - h * (k1[i] + k7[i]);
-      r5[i] = h * (d1 * k1[i] + d3 * k3[i] + d4 * k4[i] + d5 * k5[i] +
-                   d6 * k6[i] + d7 * k7[i]);
-    }
-  }
+  // void compute_dense_rs(const std::vector<double> &y_next, const std::vector<double> &y,
+  //                       double h) {
+  //   // Compute the coefficients r1, r2, r3, r4, r5
+  //   for (int i = 0; i < n_eq; i++) {
+  //     r1[i] = y[i];
+  //     r2[i] = y_next[i] - y[i];
+  //     r3[i] = y[i] + h * k1[i] - y_next[i];
+  //     r4[i] = 2.0 * (y_next[i] - y[i]) - h * (k1[i] + k7[i]);
+  //     r5[i] = h * (d1 * k1[i] + d3 * k3[i] + d4 * k4[i] + d5 * k5[i] +
+  //                  d6 * k6[i] + d7 * k7[i]);
+  //   }
+  // }
 
   int n_eq;
   double atol, rtol;
@@ -226,7 +205,7 @@ public:
   // vectors that store the results
   std::vector<double> hs;
   std::vector<double> xs;
-  std::vector<double> brightness;
+  bool brightness;
   std::vector<std::vector<double>> result;
 
   // These are temporary variables used to store the coefficients

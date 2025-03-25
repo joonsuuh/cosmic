@@ -1,369 +1,369 @@
 #include "clock.h"
 #include "metric.h"
-#include "rk45_dp.h"
+#include "rk45_dp2.h"
 #include <chrono>
 #include <cmath>
 #include <iomanip>
 #include <iostream>
+#include <fstream>
 #include <omp.h>
 #include <string>
 #include <vector>
 
-// Define GLFW_INCLUDE_NONE before including GLFW
-#define GLFW_INCLUDE_NONE
+// OpenGL stuff
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
+#include <shader.h>
 
-// Shader source code
-const char *vertexShaderSource = R"(
-    #version 330 core
-    layout (location = 0) in vec2 aPos;
-    layout (location = 1) in vec2 aTexCoord;
-    out vec2 TexCoord;
-    void main() {
-        gl_Position = vec4(aPos.x, aPos.y, 0.0, 1.0);
-        TexCoord = aTexCoord;
+// Configuration struct to hold black hole parameters
+struct BlackHoleConfig {
+    double a;          // Black hole spin parameter
+    double M;          // Black hole mass
+    double D;          // Distance to observer
+    double theta0;     // Observer inclination angle (degrees)
+    double phi0;       // Observer azimuthal angle (degrees)
+    double r_in;       // Inner radius of accretion disk
+    double r_out;      // Outer radius of accretion disk
+    double epsilon;    // Integration tolerance
+    double r_H;        // Event horizon radius
+    double r_H_tol;    // Tolerance factor for horizon detection
+    double r_far;      // Far field boundary
+    int ratiox;        // Width aspect ratio
+    int ratioy;        // Height aspect ratio
+    int resScale;      // Resolution scale factor
+};
+
+// Key callback function
+void key_callback(GLFWwindow *window, int key, int scancode, int action, int mods) {
+    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
+        glfwSetWindowShouldClose(window, GLFW_TRUE);
     }
-)";
-
-// Update fragment shader to add brightness/contrast control
-const char *fragmentShaderSource = R"(
-    #version 330 core
-    in vec2 TexCoord;
-    out vec4 FragColor;
-    uniform sampler2D bhTexture;
-
-    void main() {
-        float intensity = texture(bhTexture, TexCoord).r;
-        
-        vec3 color = vec3(intensity);
-
-        FragColor = vec4(color, 1.0);
-    }
-)";
-
-// OpenGL helper functions
-GLuint createShaderProgram() {
-  // Create vertex shader
-  GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
-  glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
-  glCompileShader(vertexShader);
-
-  // Create fragment shader
-  GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-  glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
-  glCompileShader(fragmentShader);
-
-  // Create shader program
-  GLuint shaderProgram = glCreateProgram();
-  glAttachShader(shaderProgram, vertexShader);
-  glAttachShader(shaderProgram, fragmentShader);
-  glLinkProgram(shaderProgram);
-
-  glDeleteShader(vertexShader);
-  glDeleteShader(fragmentShader);
-  return shaderProgram;
 }
 
-// Add key callback function before main()
-void key_callback(GLFWwindow *window, int key, int scancode, int action,
-                  int mods) {
-  if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
-    glfwSetWindowShouldClose(window, GLFW_TRUE);
-  }
-}
+// Function to calculate black hole image
+std::vector<std::vector<float>> calculateBlackHoleImage(const BlackHoleConfig& config) {
+    int resx = config.ratiox * config.resScale;
+    int resy = config.ratioy * config.resScale;
+    std::cout << "Calculating black hole image at resolution: " << resx << "x" << resy << std::endl;
 
-int main() {
-  // Initialize GLFW and OpenGL
-  if (!glfwInit()) {
-    std::cerr << "Failed to initialize GLFW" << std::endl;
-    return -1;
-  }
+    // Initialize 2D vector for the final image
+    std::vector<std::vector<float>> final_screen(resy, std::vector<float>(resx, 0.0f));
 
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-  glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-#ifdef __APPLE__
-  glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-#endif
+    // Screen coordinates setup
+    double x_sc = -25.0;
+    double y_sc = -12.5;  
+    double y_sc0 = y_sc;
+    double stepx = std::abs(2.0 * x_sc / resx);
+    x_sc += 0.5 * stepx;
+    double stepy = std::abs(2.0 * y_sc / resy);
 
-  // Create window
-  GLFWwindow *window =
-      glfwCreateWindow(800, 450, "Black Hole Raytracer", NULL, NULL);
-  if (!window) {
-    std::cerr << "Failed to create GLFW window" << std::endl;
-    glfwTerminate();
-    return -1;
-  }
+    // Configure OpenMP
+    int max_threads = omp_get_max_threads();
+    int num_threads = max_threads;
+    omp_set_num_threads(num_threads);
+    std::cout << "Available threads: " << max_threads << ", using: " << num_threads << std::endl;
 
-  glfwMakeContextCurrent(window);
-
-  // Initialize GLAD
-  if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
-    std::cerr << "Failed to initialize GLAD" << std::endl;
-    glfwTerminate();
-    return -1;
-  }
-
-  // After window creation, add:
-  glfwSetKeyCallback(window, key_callback);
-
-  // Create and bind texture
-  GLuint texture;
-  glGenTextures(1, &texture);
-  glBindTexture(GL_TEXTURE_2D, texture);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-  // Create shader program
-  GLuint shaderProgram = createShaderProgram();
-
-  // Create vertex data for full-screen quad
-  // Screen Space:        Texture Space:
-  // (-1,1)----(1,1)     (0,0)----(1,0)
-  // |         |         |         |
-  // |         |         |         |
-  // (-1,-1)---(1,-1)    (0,1)----(1,1)
-  float vertices[] = {
-      // positions  // texture coords
-      -1.0f, -1.0f, 0.0f, 1.0f, // bottom left
-      1.0f,  -1.0f, 1.0f, 1.0f, // bottom right
-      1.0f,  1.0f,  1.0f, 0.0f, // top right
-      -1.0f, 1.0f,  0.0f, 0.0f  // top left
-  };
-  unsigned int indices[] = {0, 1, 2, 0, 2, 3};
-
-  // Set up vertex buffer and vertex array object
-  GLuint VBO, VAO, EBO;
-  glGenVertexArrays(1, &VAO);
-  glGenBuffers(1, &VBO);
-  glGenBuffers(1, &EBO);
-
-  glBindVertexArray(VAO);
-  glBindBuffer(GL_ARRAY_BUFFER, VBO);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-  glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices,
-               GL_STATIC_DRAW);
-
-  glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void *)0);
-  glEnableVertexAttribArray(0);
-  glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float),
-                        (void *)(2 * sizeof(float)));
-  glEnableVertexAttribArray(1);
-
-  // Black hole parameters
-  double a = 0.99;
-  double M = 1.0;
-  double D = 500.0;
-  double theta0 = 85.0 * M_PI / 180.0;
-  double phi0 = 0.0;
-  double r_in = 5.0 * M;
-  double r_out = 20.0 * M;
-  double epsilon = 1.0e-5;
-  double r_H = M + sqrt(M * M - a * a);
-  double r_H_tol = 1.01 * r_H;
-  double r_far = r_out * 50.0;
-  boyer_lindquist_metric metric(a, M);
-
-  int ratiox = 16;
-  int ratioy = 9;
-  int resScale = 10;
-  int resx = ratiox * resScale;
-  int resy = ratioy * resScale;
-  std::cout << "Resolution: " << resx << "x" << resy << endl;
-
-  double x_sc = -25.0;
-  double y_sc = -12.5;
-  double y_sc0 = y_sc;
-  double stepx = abs(2.0 * x_sc / resx);
-  x_sc += 0.5 * stepx;
-  double stepy = abs(2.0 * y_sc / resy);
-
-  // Create a 2D vector to store the final output
-  vector<vector<double>> final_screen(resy, vector<double>(resx, 0.0));
-
-  // Get number of available threads
-  int max_threads = omp_get_max_threads();
-  int num_threads = 8; // Set desired number of threads here
-  omp_set_num_threads(num_threads);
-  cout << "Available Threads: " << max_threads << endl;
-  cout << "Using Threads: " << num_threads << endl;
-
-  // Create artificial scope with braces
-  {
+    // Start timing
     Clock clock;
-
-#pragma omp parallel
+    
+    // Parallel region for ray tracing
+    #pragma omp parallel
     {
-      // Each thread needs its own metric instance to avoid race conditions
-      boyer_lindquist_metric local_metric(a, M);
+        // Each thread needs its own metric instance
+        boyer_lindquist_metric local_metric(config.a, config.M);
+        
+        // Calculate rays in parallel
+        #pragma omp for collapse(2) schedule(dynamic, 16) nowait
+        for (int i = 0; i < resx; i++) {
+            for (int j = 0; j < resy; j++) {
+                // Calculate screen coordinates
+                double local_x_sc = x_sc + (i * stepx);
+                double local_y_sc = y_sc0 + (j * stepy);
 
-// Parallelize the outer loop
-// collapse(2) schedule(dynamic) nowait: optional; is used for optimization
-#pragma omp for collapse(2) schedule(dynamic) nowait
-      for (int i = 0; i < resx; i++) {
-        for (int j = 0; j < resy; j++) {
-          double local_x_sc = x_sc + (i * stepx);
-          double local_y_sc = y_sc0 + (j * stepy);
+                // Calculate initial ray parameters
+                double beta = local_x_sc / config.D;
+                double alpha = local_y_sc / config.D;
+                double r = std::sqrt((config.D * config.D) + (local_x_sc * local_x_sc) + (local_y_sc * local_y_sc));
+                double theta = config.theta0 - alpha;
+                double phi = beta;
+                local_metric.compute_metric(r, theta);
 
-          double beta = local_x_sc / D;
-          double alpha = local_y_sc / D;
-          double r = sqrt((D * D) + (local_x_sc * local_x_sc) +
-                          (local_y_sc * local_y_sc));
-          double theta = theta0 - alpha;
-          double phi = beta;
-          local_metric.compute_metric(r, theta);
+                // Define differential equations for geodesic path
+                // auto dydx = [&local_metric](double x, const std::vector<double> &y) {
+                auto dydx = [&local_metric](const std::vector<double> &y) {
+                    local_metric.compute_metric(y[0], y[1]);
+                    double r = y[0];
+                    double th = y[1];
+                    double phi = y[2];
+                    double u_r = y[3];
+                    double u_th = y[4];
+                    double u_phi = y[5]; 
 
-          auto dydx = [&](double x, const vector<double> &y) {
-            local_metric.compute_metric(y[0], y[1]);
-            double r = y[0];
-            double th = y[1];
-            double phi = y[2];
-            double u_r = y[3];
-            double u_th = y[4];
-            double u_phi = y[5];
+                    // Calculate upper time component
+                    double u_uppert = std::sqrt((local_metric.gamma11 * u_r * u_r) + 
+                                        (local_metric.gamma22 * u_th * u_th) + 
+                                        (local_metric.gamma33 * u_phi * u_phi)) / local_metric.alpha;
+                    
+                    // Position derivatives
+                    double drdt = local_metric.gamma11 * u_r / u_uppert;
+                    double dthdt = local_metric.gamma22 * u_th / u_uppert;
+                    double dphidt = (local_metric.gamma33 * u_phi / u_uppert) - local_metric.beta3;
 
-            double u_uppert = sqrt((local_metric.gamma11 * u_r * u_r) +
-                                   (local_metric.gamma22 * u_th * u_th) +
-                                   (local_metric.gamma33 * u_phi * u_phi)) /
-                              local_metric.alpha;
+                    // Momentum derivatives
+                    double temp1 = (u_r * u_r * local_metric.d_gamma11_dr) + 
+                                   (u_th * u_th * local_metric.d_gamma22_dr) + 
+                                   (u_phi * u_phi * local_metric.d_gamma33_dr);
+                    double durdt = (-local_metric.alpha * u_uppert * local_metric.d_alpha_dr) + 
+                                   (u_phi * local_metric.d_beta3_dr) - (temp1 / (2.0 * u_uppert));
 
-            double drdt = local_metric.gamma11 * u_r / u_uppert;
-            double dthdt = local_metric.gamma22 * u_th / u_uppert;
-            double dphidt =
-                (local_metric.gamma33 * u_phi / u_uppert) - local_metric.beta3;
+                    double temp2 = (u_r * u_r * local_metric.d_gamma11_dth) + 
+                                   (u_th * u_th * local_metric.d_gamma22_dth) + 
+                                   (u_phi * u_phi * local_metric.d_gamma33_dth);
+                    double duthdt = (-local_metric.alpha * u_uppert * local_metric.d_alpha_dth) + 
+                                    (u_phi * local_metric.d_beta3_dth) - temp2 / (2.0 * u_uppert);
+                    
+                    // u_phi is conserved
+                    double duphidt = 0;
 
-            double temp1 = (u_r * u_r * local_metric.d_gamma11_dr) +
-                           (u_th * u_th * local_metric.d_gamma22_dr) +
-                           (u_phi * u_phi * local_metric.d_gamma33_dr);
-            double durdt =
-                (-local_metric.alpha * u_uppert * local_metric.d_alpha_dr) +
-                (u_phi * local_metric.d_beta3_dr) - (temp1 / (2.0 * u_uppert));
+                    return std::vector<double>{drdt, dthdt, dphidt, durdt, duthdt, duphidt};
+                };
 
-            double temp2 = (u_r * u_r * local_metric.d_gamma11_dth) +
-                           (u_th * u_th * local_metric.d_gamma22_dth) +
-                           (u_phi * u_phi * local_metric.d_gamma33_dth);
-            double duthdt =
-                (-local_metric.alpha * u_uppert * local_metric.d_alpha_dth) +
-                (u_phi * local_metric.d_beta3_dth) - temp2 / (2.0 * u_uppert);
-            double duphidt = 0;
+                // Calculate initial velocities
+                double u_r = -std::sqrt(local_metric.g_11) * std::cos(beta) * std::cos(alpha);
+                double u_theta = -std::sqrt(local_metric.g_22) * std::sin(alpha);
+                double u_phi = std::sqrt(local_metric.g_33) * std::sin(beta) * std::cos(alpha);
 
-            return vector<double>{drdt, dthdt, dphidt, durdt, duthdt, duphidt};
-          };
+                // Initial state vector
+                std::vector<double> y0 = {r, theta, phi, u_r, u_theta, u_phi};
 
-          double u_r = -sqrt(local_metric.g_11) * cos(beta) * cos(alpha);
-          double u_theta = -sqrt(local_metric.g_22) * sin(alpha);
-          double u_phi = sqrt(local_metric.g_33) * sin(beta) * cos(alpha);
+                // Stopping conditions
+                auto stop_at_disk = [&config](double x, const std::vector<double> &y) {
+                    double r = y[0];
+                    double theta = y[1];
+                    return ((r >= config.r_in && r <= config.r_out) && 
+                            (std::abs(theta - M_PI / 2.0) < 0.01));
+                };
 
-          vector<double> y0 = {r, theta, phi, u_r, u_theta, u_phi};
+                auto stop_at_boundary = [&config](double x, const std::vector<double> &y) {
+                    double r = y[0];
+                    return (r < config.r_H_tol || r > config.r_far);
+                };
 
-          int n = 10'000;
-          double t0 = 0.0;
-          double t_end = 10'000;
-          double dt = (t_end - t0) / n;
-          vector<double> t_out(n);
-          for (int k = 0; k < n; k++) {
-            t_out[k] = t0 + k * dt;
-          }
+                // Perform integration
+                rk45_dormand_prince rk45(6, 1.0e-12, 1.0e-12);
+                rk45.integrate(dydx, stop_at_disk, stop_at_boundary, 0.0, y0);
 
-          auto stop1 = [&](double x, const vector<double> &y) {
-            double r = y[0];
-            double theta = y[1];
-            return ((r >= r_in && r <= r_out) &&
-                    (abs(theta - M_PI / 2.0) < 0.01));
-          };
+                // Calculate observed intensity
+                float Iobs = 0.0f;
+                if (rk45.brightness) {  // Changed from rk45.brightness[0] to rk45.brightness
+                    // Get final state
+                    double rf = rk45.result.back()[0];
+                    double u_rf = -rk45.result.back()[3];
+                    double u_thf = -rk45.result.back()[4];
+                    double u_phif = -rk45.result.back()[5];
+                    
+                    // Compute metric at final position
+                    // local_metric.compute_metric(rf, rk45.result.back()[1]);
 
-          auto stop2 = [&](double x, const vector<double> &y) {
-            double r = y[0];
-            return (r < r_H_tol || r > r_far);
-          };
-
-          rk45_dormand_prince rk45(6, 1.0e-12, 1.0e-12);
-          rk45.integrate(dydx, stop1, stop2, 0.0, y0, true, t_out);
-
-          // Calculate observed intensity with gravitational redshift and
-          // doppler boosting
-          double Iobs = 0.0;
-          if (rk45.brightness[0] != 0) {
-            double rf = rk45.result.back()[0];
-            double u_rf = -rk45.result.back()[3];
-            double u_thf = -rk45.result.back()[4];
-            double u_phif = -rk45.result.back()[5];
-
-            double u_uppertf = sqrt((local_metric.gamma11 * u_rf * u_rf) +
-                                    (local_metric.gamma22 * u_thf * u_thf) +
-                                    (local_metric.gamma33 * u_phif * u_phif)) /
-                               local_metric.alpha;
-            double u_lower_tf =
-                (-local_metric.alpha * local_metric.alpha * u_uppertf) +
-                (u_phif * local_metric.beta3);
-            double omega = 1.0 / (a + (pow(rf, 3.0 / 2.0) / sqrt(M)));
-            double oneplusz =
-                (1.0 + (omega * u_phif / u_lower_tf)) /
-                sqrt(-local_metric.g_00 - (omega * omega * local_metric.g_33) -
-                     (2 * omega * local_metric.g_03));
-            Iobs = 1.0 / (oneplusz * oneplusz * oneplusz);
-          }
-
-          final_screen[resy - j - 1][i] = Iobs;
-          // #pragma omp critical
-          // {
-          //     fprintf(stderr, "Thread %d is working on pixel (%d, %d)\n",
-          //             omp_get_thread_num(), i, j);
-          // }
+                    // Calculate final 4-velocity components
+                    double u_uppertf = std::sqrt((local_metric.gamma11 * u_rf * u_rf) + 
+                                        (local_metric.gamma22 * u_thf * u_thf) + 
+                                        (local_metric.gamma33 * u_phif * u_phif)) / local_metric.alpha;
+                    double u_lower_tf = (-local_metric.alpha * local_metric.alpha * u_uppertf) + 
+                                    (u_phif * local_metric.beta3);
+                    
+                    // Calculate redshift factor
+                    double omega = 1.0 / (config.a + (std::pow(rf, 3.0 / 2.0) / std::sqrt(config.M)));
+                    double oneplusz = (1.0 + (omega * u_phif / u_lower_tf)) / 
+                                    std::sqrt(-local_metric.g_00 - (omega * omega * local_metric.g_33) - 
+                                    (2 * omega * local_metric.g_03));
+                    
+                    // Calculate observed intensity with relativistic beaming
+                    Iobs = 1.0f / (oneplusz * oneplusz * oneplusz);
+                }
+                
+                // Store result (flipping y-coordinate for image)
+                final_screen[resy - j - 1][i] = Iobs;
+            }
         }
-      }
     }
-  } // Clock destructor after out of scope
+    
+    return final_screen;
+}
 
-  // Convert final_screen to flat array for OpenGL
-  std::vector<float> textureData(resx * resy);
+// Main function
+int main() {
+    std::cout << "Black Hole Raytracer starting up...\n";
+    
+    // Configure black hole parameters
+    BlackHoleConfig config;
+    config.a = 0.99;           // Spin parameter
+    config.M = 1.0;            // Mass
+    config.D = 500.0;          // Distance
+    config.theta0 = 85.0 * M_PI / 180.0;  // Inclination angle
+    config.phi0 = 0.0;         // Azimuthal angle
+    config.r_in = 5.0 * config.M;         // Inner disk radius
+    config.r_out = 20.0 * config.M;       // Outer disk radius
+    config.epsilon = 1.0e-5;   // Integration tolerance
+    config.r_H = config.M + std::sqrt(config.M * config.M - config.a * config.a);  // Event horizon
+    config.r_H_tol = 1.01 * config.r_H;   // Horizon detection tolerance
+    config.r_far = config.r_out * 50.0;   // Far field boundary
+    config.ratiox = 16;        // Width aspect ratio
+    config.ratioy = 9;         // Height aspect ratio
+    config.resScale = 10;      // Resolution scale
 
-  // add data to textureData
-  // for (int i = 0; i < resy; i++) {
-  //     for (int j = 0; j < resx; j++) {
-  //         textureData[i * resx + j] = static_cast<float>(final_screen[i][j]);
-  //     }
-  // }
+    // Calculate black hole image
+    auto image_data = calculateBlackHoleImage(config);
 
-  // Find maximum intensity and normalize in a single pass
-  double maxIntensity = 0.0;
-  for (int i = 0; i < resy; i++) {
-    for (int j = 0; j < resx; j++) {
-      maxIntensity = std::max(maxIntensity, final_screen[i][j]);
-      textureData[i * resx + j] = static_cast<float>(final_screen[i][j]);
+    // Image render
+    std::cout << "Raytracing complete. Rendering image...\n";
+    // normalize image data
+    float max_intensity = 0.0f;
+    for (const auto& row : image_data) {
+        for (const auto& intensity : row) {
+            max_intensity = std::max(max_intensity, intensity);
+        }
     }
-  }
+    printf("Max intensity: %f\n", max_intensity);
+    for (auto& row : image_data) {
+        for (auto& intensity : row) {
+            intensity /= max_intensity;
+        }
+    }
+    
+    // Save image to file
+    std::string filename = "../data/bh_image/BH_" + 
+                          std::to_string(config.ratiox * config.resScale) + "x" +
+                          std::to_string(config.ratioy * config.resScale) + "_optimized.csv";
+    std::ofstream output_file(filename);
+    if (!output_file.is_open()) {
+        std::cerr << "Failed to open output file: " << filename << std::endl;
+        // Continue with visualization regardless of file save
+    } else {
+        for (const auto& row : image_data) {
+            for (size_t j = 0; j < row.size(); j++) {
+                output_file << row[j];
+                if (j < row.size() - 1) output_file << " ";
+            }
+            output_file << "\n";
+        }
+        output_file.close();
+        std::cout << "Image data saved to: " << filename << std::endl;
+    }
 
-  // Apply normalization to the texture data
-  for (int i = 0; i < textureData.size(); i++) {
-    textureData[i] /= static_cast<float>(maxIntensity);
-  }
+    // Initialize GLFW for visualization
+    if (!glfwInit()) {
+        std::cerr << "Failed to initialize GLFW" << std::endl;
+        return -1;
+    }
 
-  // Upload texture data
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, resx, resy, 0, GL_RED, GL_FLOAT,
-               textureData.data());
+    // Set up GLFW window hints
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    #ifdef __APPLE__
+        glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+    #endif
 
-  // Render loop
-  while (!glfwWindowShouldClose(window)) {
-    glClear(GL_COLOR_BUFFER_BIT);
+    // Create window
+    int window_width = 800;
+    int window_height = 450;
+    GLFWwindow *window = glfwCreateWindow(window_width, window_height, 
+                                          "Black Hole Raytracer", NULL, NULL);
+    if (!window) {
+        std::cerr << "Failed to create GLFW window" << std::endl;
+        glfwTerminate();
+        return -1;
+    }
 
-    glUseProgram(shaderProgram);
+    glfwMakeContextCurrent(window);
+    glfwSetKeyCallback(window, key_callback);
+
+    // Initialize GLAD
+    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
+        std::cerr << "Failed to initialize GLAD" << std::endl;
+        glfwTerminate();
+        return -1;
+    }
+
+    // Create and bind texture
+    GLuint texture;
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    
+    // Allocate texture memory and upload image data
+    int tex_width = image_data[0].size();
+    int tex_height = image_data.size();
+    
+    // Convert 2D vector to 1D array for OpenGL
+    std::vector<float> flattened_data;
+    flattened_data.reserve(tex_width * tex_height);
+    for (const auto& row : image_data) {
+        flattened_data.insert(flattened_data.end(), row.begin(), row.end());
+    }
+    
+    // Upload texture data
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, tex_width, tex_height, 0, GL_RED, GL_FLOAT, flattened_data.data());
+    glGenerateMipmap(GL_TEXTURE_2D);
+
+    // Create shader program
+    Shader shader("simple.vert", "bhtexture.frag");  // Update path
+
+    // Create vertex data for full-screen quad
+    float vertices[] = {
+        // positions  // texture coords
+        -1.0f, -1.0f, 0.0f, 1.0f, // bottom left
+        1.0f,  -1.0f, 1.0f, 1.0f, // bottom right
+        1.0f,  1.0f,  1.0f, 0.0f, // top right
+        -1.0f, 1.0f,  0.0f, 0.0f  // top left
+    };
+    unsigned int indices[] = {0, 1, 2, 0, 2, 3};
+
+    // Set up vertex buffer and vertex array object
+    GLuint VAO, VBO, EBO;
+    glGenVertexArrays(1, &VAO);
+    glGenBuffers(1, &VBO);
+    glGenBuffers(1, &EBO);
+
     glBindVertexArray(VAO);
-    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+    
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+    
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 
-    glfwSwapBuffers(window);
-    glfwPollEvents();
-  }
+    // Set up vertex attributes
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void *)0);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void *)(2 * sizeof(float)));
+    glEnableVertexAttribArray(1);
 
-  // Cleanup
-  glDeleteVertexArrays(1, &VAO);
-  glDeleteBuffers(1, &VBO);
-  glDeleteBuffers(1, &EBO);
-  glDeleteProgram(shaderProgram);
-  glDeleteTextures(1, &texture);
+    // Initial brightness and contrast values
 
-  glfwTerminate();
-  return 0;
+    // Main render loop
+    std::cout << "Starting render loop. Press ESC to exit." << std::endl;
+    while (!glfwWindowShouldClose(window)) {
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        // Render the quad with the black hole texture
+        shader.use();    
+        glBindVertexArray(VAO);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+        glfwSwapBuffers(window);
+        glfwPollEvents();
+    }
+
+    // Clean up resources
+    glDeleteVertexArrays(1, &VAO);
+    glDeleteBuffers(1, &VBO);
+    glDeleteBuffers(1, &EBO);
+    glDeleteTextures(1, &texture);
+    glDeleteShader(shader.ID);
+
+    glfwTerminate();
+    return 0;
 }

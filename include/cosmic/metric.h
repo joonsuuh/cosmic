@@ -1,8 +1,6 @@
 #include <vector>
 #include <cmath>
 #include <iostream>
-using namespace std;
-
 
 class boyer_lindquist_metric {
     public:
@@ -16,22 +14,22 @@ class boyer_lindquist_metric {
             // Define General Terms
             double r2 = r * r;
             double a2 = a * a;
-            double sin2 = sin(th) * sin(th);
-            double cos2 = cos(th) * cos(th);
+            double sin2 = std::sin(th) * std::sin(th);
+            double cos2 = std::cos(th) * std::cos(th);
             double p2 = r2 + (a2 * cos2);
             double delta = r2 + a2 - (2.0 * M * r);
             double SUM = ((r2 + a2) * (r2 + a2)) - (a2 * delta * sin2);
 
-            alpha = sqrt((p2 * delta) / SUM);
+            alpha = std::sqrt((p2 * delta) / SUM);
             beta3 = (-2.0 * M * a * r) / SUM;
             gamma11 = delta / p2;
             gamma22 = 1.0 / p2;
-            gamma33 = p2 / (SUM * sin(th) * sin(th));
+            gamma33 = p2 / (SUM * std::sin(th) * std::sin(th));
             g_00 = ((2.0 * M * r) / p2) - 1.0;
-            g_03 = ((-2.0 * M * a * r) / p2) * sin(th) * sin(th);
+            g_03 = ((-2.0 * M * a * r) / p2) * std::sin(th) * std::sin(th);
             g_11 = p2 / delta;
             g_22 = p2;
-            g_33 = (SUM / p2) * sin(th) * sin(th);
+            g_33 = (SUM / p2) * std::sin(th) * std::sin(th);
 
             // Derivatives w.r.t r
             double dp2_dr = 2.0 * r;
@@ -45,13 +43,13 @@ class boyer_lindquist_metric {
             d_beta3_dr = -2.0 * M * a * (1.0 / SUM + r * dSUMinv_dr);
 
             // Derivatives w.r.t theta
-            double dp2_dth = -2.0 * a * a * sin(th) * cos(th);
+            double dp2_dth = -2.0 * a * a * std::sin(th) * std::cos(th);
             double dp2inv_dth = -dp2_dth / p2 / p2;
             double ddelta_dth = 0;
-            double dSUMinv_dth = 2.0 * a2 * delta * sin(th) * cos(th) / SUM / SUM;
+            double dSUMinv_dth = 2.0 * a2 * delta * std::sin(th) * std::cos(th) / SUM / SUM;
             d_gamma11_dth = delta * dp2inv_dth;
             d_gamma22_dth = dp2inv_dth;
-            d_gamma33_dth = (dp2_dth / SUM / sin2) + (dSUMinv_dth * p2 / sin2) - (2.0 * cos(th) / sin(th) / sin(th) / sin(th) * p2 / SUM);
+            d_gamma33_dth = (dp2_dth / SUM / sin2) + (dSUMinv_dth * p2 / sin2) - (2.0 * std::cos(th) / std::sin(th) / std::sin(th) / std::sin(th) * p2 / SUM);
             d_alpha_dth = 0.5 / alpha * delta * (dp2_dth / SUM + dSUMinv_dth * p2);
             d_beta3_dth = -2.0 * M * a * r * dSUMinv_dth;
         }
