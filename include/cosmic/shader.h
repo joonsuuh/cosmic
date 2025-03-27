@@ -1,12 +1,16 @@
-#ifndef SHADER_H
-#define SHADER_H
+#pragma once
 
 #include <glad/glad.h>
-#include <filesystem>
 #include <string>
 #include <fstream>
 #include <sstream>
 #include <iostream>
+
+#ifndef SHADER_DIR
+	// If SHADER_DIR is not defined (in cmake)
+	// and using command line compile with `manual.sh`
+	#define SHADER_DIR "shaders/"
+#endif
 
 class Shader {
 public:
@@ -15,12 +19,6 @@ public:
 
 	// constructor: read and build shader
 	Shader(const char* vertexPath, const char* fragmentPath) {
-        // Use filesystem to handle paths
-        std::filesystem::path shaderDir = "../shaders";
-        std::filesystem::path fullVertexPath = shaderDir / vertexPath;
-        std::filesystem::path fullFragmentPath = shaderDir / fragmentPath;
-
-		// get vertex & fragment source from filePath
 		std::string vertexCode;
 		std::string fragmentCode;
 		std::ifstream vShaderFile;
@@ -28,13 +26,13 @@ public:
 		vShaderFile.exceptions(std::ifstream::failbit | std::ifstream::badbit);
 		fShaderFile.exceptions(std::ifstream::failbit | std::ifstream::badbit);
 		try {
-			vShaderFile.open(fullVertexPath);
+			vShaderFile.open(std::string(SHADER_DIR) + vertexPath);
 			std::stringstream vShaderStream;
 			vShaderStream << vShaderFile.rdbuf();
 			vShaderFile.close();
 			vertexCode = vShaderStream.str();
 
-			fShaderFile.open(fullFragmentPath);
+			fShaderFile.open(std::string(SHADER_DIR) + fragmentPath);
 			std::stringstream fShaderStream;
 			fShaderStream << fShaderFile.rdbuf();
 			fShaderFile.close();
@@ -127,5 +125,3 @@ public:
 		glUniform1f(vertexLocation, offset);
 	}
 };
-
-#endif

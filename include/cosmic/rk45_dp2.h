@@ -32,8 +32,8 @@ public:
 
     double h = 0.1;
     double x = x0;
-    std::copy(y0.begin(), y0.end(), y_next.begin());
-    std::vector<double>& y = y_next;
+    // std::copy(y0.begin(), y0.end(), y_next.begin());
+    std::vector<double> y = y0;
     
     double err = 1.0;
     double err_prev = 1.0;
@@ -58,7 +58,7 @@ public:
             x += h;
             // hs.push_back(h);
             // xs.push_back(x);
-            result.push_back(y_next);
+            // result.push_back(y_next);
             
             std::swap(k1, k7);
             err_prev = err;
@@ -77,7 +77,7 @@ public:
         }
       }
       // print iteration count
-      std::cout << "Iterations: " << iteration << "\n";
+      // std::cout << "Iterations: " << iteration << "\n";
     } catch (const std::exception& e) {
       std::cerr << "Caught exception: " << e.what() << std::endl;
     }

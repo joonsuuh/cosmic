@@ -1,12 +1,13 @@
 #pragma once
 
-#include <vector>
 #include <cmath>
 #include <iostream>
+#include <vector>
 
 class rk45_dormand_prince {
 public:
-  rk45_dormand_prince(int num_equations, double tolerance_abs, double tolerance_rel) {
+  rk45_dormand_prince(int num_equations, double tolerance_abs,
+                      double tolerance_rel) {
     // constructor, initialize the data members
     n_eq = num_equations;
     atol = tolerance_abs;
@@ -30,10 +31,10 @@ public:
   }
 
   template <typename F, typename StopCond1, typename StopCond2>
-  std::vector<double> integrate(const F &f, const StopCond1 &stop1, const StopCond2 &stop2, double x0, 
-                                const std::vector<double> &y0,
-                                bool dense_output,
-                                const std::vector<double> &x_out = {}) {
+  std::vector<double>
+  integrate(const F &f, const StopCond1 &stop1, const StopCond2 &stop2,
+            double x0, const std::vector<double> &y0, bool dense_output,
+            const std::vector<double> &x_out = {}) {
     // clear the arrays so that we start fresh every time we call this function
     xs.clear();
     result.clear();
@@ -50,16 +51,19 @@ public:
     k1 = f(x, y);
 
     if (!dense_output) {
-      // If we are not using dense output, we need to store the initial condition
+      // If we are not using dense output, we need to store the initial
+      // condition
       hs.push_back(h);
       xs.push_back(x);
       result.push_back(y);
     }
 
-    std::vector<double> y_prev = y; // y_prev stores the value of y from the previous step
-    std::vector<double> y_next = y; // y_next stores the value of y in the next step
+    std::vector<double> y_prev =
+        y; // y_prev stores the value of y from the previous step
+    std::vector<double> y_next =
+        y; // y_next stores the value of y in the next step
     std::vector<double> y_out(n_eq); // This stores the value for dense output
-    int xout_idx = 0; // This is the index for the x_out array
+    int xout_idx = 0;                // This is the index for the x_out array
 
     while (!stop1(x, y) && !stop2(x, y)) {
       // Do not update y in place, since there is no guarantee it is accepted
@@ -72,14 +76,13 @@ public:
       // Accept the step if the scalar error is below 1, otherwise reject it and
       // do not move forward
       if (err < 1.0) {
-        
-          x += h;
-          // This is what we do when not using dense output
-          hs.push_back(h);
-          xs.push_back(x);
-          result.push_back(y_next);
 
-        
+        x += h;
+        // This is what we do when not using dense output
+        hs.push_back(h);
+        xs.push_back(x);
+        result.push_back(y_next);
+
         k1 = k7;
         // store the current error as err_prev
         err_prev = err;
@@ -102,10 +105,11 @@ public:
       h = std::max(h, hmin);
       h = std::min(h, hmax);
 
-      // Uncomment the following line to see the step size and error at each step
-      // std::cout << "x = " << x << ", h = " << h << ", err = " << err << std::endl;
+      // Uncomment the following line to see the step size and error at each
+      // step std::cout << "x = " << x << ", h = " << h << ", err = " << err <<
+      // std::endl;
     }
-    if (stop1(x, y)){
+    if (stop1(x, y)) {
       brightness = true;
     } else {
       brightness = false;
@@ -115,7 +119,8 @@ public:
   }
 
   template <typename F>
-  std::vector<double> step(const F& f, double h, double x, const std::vector<double> &y) {
+  std::vector<double> step(const F &f, double h, double x,
+                           const std::vector<double> &y) {
     // Compute the next step in y, given x and y of the current step
     std::vector<double> y_next(n_eq);
 
@@ -139,15 +144,15 @@ public:
     // Fourth step
     k4 = f(x + c4 * h, y_tmp);
     for (int i = 0; i < n_eq; i++) {
-      y_tmp[i] = y[i] + h * (a51 * k1[i] + a52 * k2[i] + a53 * k3[i] +
-                              a54 * k4[i]);
+      y_tmp[i] =
+          y[i] + h * (a51 * k1[i] + a52 * k2[i] + a53 * k3[i] + a54 * k4[i]);
     }
 
     // Fifth step
     k5 = f(x + c5 * h, y_tmp);
     for (int i = 0; i < n_eq; i++) {
       y_tmp[i] = y[i] + h * (a61 * k1[i] + a62 * k2[i] + a63 * k3[i] +
-                              a64 * k4[i] + a65 * k5[i]);
+                             a64 * k4[i] + a65 * k5[i]);
     }
 
     // Sixth step
@@ -162,7 +167,7 @@ public:
     // between y1 and y2
     for (int i = 0; i < n_eq; i++) {
       y_err[i] = h * (e1 * k1[i] + e3 * k3[i] + e4 * k4[i] + e5 * k5[i] +
-                       e6 * k6[i] + e7 * k7[i]);
+                      e6 * k6[i] + e7 * k7[i]);
     }
 
     return y_next;
@@ -171,14 +176,14 @@ public:
   double error(const std::vector<double> &y) {
     double err = 0.0;
     for (int i = 0; i < n_eq; i++) {
-      double scale =
-          atol + std::max(std::abs(y[i]), std::abs(y[i])) * rtol;
+      double scale = atol + std::max(std::abs(y[i]), std::abs(y[i])) * rtol;
       err += std::pow(y_err[i] / scale, 2);
     }
     return std::sqrt(err / n_eq);
   }
 
-  // void compute_dense_rs(const std::vector<double> &y_next, const std::vector<double> &y,
+  // void compute_dense_rs(const std::vector<double> &y_next, const
+  // std::vector<double> &y,
   //                       double h) {
   //   // Compute the coefficients r1, r2, r3, r4, r5
   //   for (int i = 0; i < n_eq; i++) {
@@ -198,8 +203,8 @@ public:
   const double hmin = 1.0e-10;
   const double hmax = 1.0;
 
-  // These are temporary variables used to store the coefficients. You are allowed to
-  // define additional temporary variables if you need them.
+  // These are temporary variables used to store the coefficients. You are
+  // allowed to define additional temporary variables if you need them.
   std::vector<double> k1, k2, k3, k4, k5, k6, k7, y_tmp, y_err;
 
   // vectors that store the results
@@ -234,7 +239,8 @@ public:
   const double a64 = 49.0 / 176.0;
   const double a65 = -5103.0 / 18656.0;
 
-  // Note that a71, a72, a73, a74, a75, a76 are essentially the coefficients of the 5th order solution
+  // Note that a71, a72, a73, a74, a75, a76 are essentially the coefficients of
+  // the 5th order solution
   const double a71 = 35.0 / 384.0;
   const double a72 = 0.0;
   const double a73 = 500.0 / 1113.0;
@@ -242,8 +248,9 @@ public:
   const double a75 = -2187.0 / 6784.0;
   const double a76 = 11.0 / 84.0;
 
-  // These coefficients are used to estimate the error in the solution. They are essentially 
-  // the coefficients of the 5th order solution minus the 4th order solution, i.e. b_i - b_i^*.
+  // These coefficients are used to estimate the error in the solution. They are
+  // essentially the coefficients of the 5th order solution minus the 4th order
+  // solution, i.e. b_i - b_i^*.
   const double e1 = 71.0 / 57600.0;
   const double e2 = 0.0;
   const double e3 = -71.0 / 16695.0;

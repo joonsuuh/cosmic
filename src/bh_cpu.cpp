@@ -1,17 +1,52 @@
-#include "clock.h"
-#include "metric.h"
-// #include "rk45_dp2.h"
-#include "rk45dp3.h"
+// STL
 #include <algorithm>
 #include <chrono>
-#include <cmath>
 #include <fstream>
-#include <iomanip>
 #include <iostream>
-#include <omp.h> // Add OpenMP header
-#include <string>
+#include <utility>
 #include <vector>
-#include <utility>  // for std::move
+
+// External Libraries
+#include <omp.h>
+
+// Project Headers
+#include "clock.h"
+#include "metric.h"
+#include "rk45dp3.h"
+
+#ifndef PPM_DIR
+  #define PPM_DIR "data/"
+#endif
+
+struct BlackHole {
+  double a {0.99};        // spin parameter
+  double M {1.0};        // mass
+  double D {500.0};        // distance
+  double theta0 {85.0 * M_PI / 180.0};   // initial theta
+  double phi0 {0.0};     // initial phi
+  double r_in {5.0 * M};     // inner radius
+  double r_out {20.0 * M};    // outer radius
+  double epsilon {1.0e-5};  // tolerance
+  double r_H {M + std::sqrt(M * M - a * a)};
+  double r_H_tol {1.01 * r_H};
+  double r_far {r_out * 50.0};
+};
+
+struct Image {
+  int ratiox {16};
+    int ratioy {9};
+    int resScale {10};
+    int resx {ratiox * resScale};
+    int resy {ratioy * resScale};
+    double scaling {1.5};
+    double x_sc {-ratiox * scaling};
+    double y_sc {-ratioy * scaling};
+    double stepx {std::abs(2.0 * x_sc / resx)};
+    double stepy {std::abs(2.0 * y_sc / resy)};
+};
+
+// Function declaration
+inline void compute_derivatives(boyer_lindquist_metric& metric, double* y, double* k);
 
 int main() {
   std::cout << "CPU version running\n";
@@ -27,7 +62,6 @@ int main() {
   double r_H = M + std::sqrt(M * M - a * a);
   double r_H_tol = 1.01 * r_H;
   double r_far = r_out * 50.0;
-  boyer_lindquist_metric metric(a, M);
 
   int ratiox = 16;
   int ratioy = 9;
@@ -43,15 +77,16 @@ int main() {
   x_sc += 0.5 * stepx;
   double stepy = std::abs(2.0 * y_sc / resy);
 
-  // Create a 2D vector to store the final output
-  std::vector<std::vector<double>> final_screen(resy, std::vector<double>(resx, 0.0));
+  // Create a 1D vector to store the final output
+  std::vector<double> final_screen(resx * resy, 0.0);
+  std::cout << "Vector size in bytes: " << final_screen.size() * sizeof(double) << std::endl;
 
   // Get number of available threads
   int max_threads = omp_get_max_threads();
   int num_threads = max_threads; // Set desired number of threads here
   omp_set_num_threads(num_threads);
-  std::cout << "Available Threads: " << max_threads << std::endl;
-  std::cout << "Using Threads: " << num_threads << std::endl;
+  std::cout << "Available Threads: " << max_threads << "\n"
+            << "Using Threads: " << num_threads << std::endl;
 
   // Parallel region
   {
@@ -66,7 +101,7 @@ int main() {
       for (int i = 0; i < resx; i++) {
         for (int j = 0; j < resy; j++) {
           // Reset metric for this iteration
-          thread_metric = boyer_lindquist_metric(a, M);
+          // thread_metric = boyer_lindquist_metric(a, M);
           
           double local_x_sc = x_sc + (i * stepx);
           double local_y_sc = y_sc + (j * stepy);
@@ -79,57 +114,16 @@ int main() {
           double phi = beta;
           thread_metric.compute_metric(r, theta);
 
-          // auto dydx = [&](double x, const std::vector<double> &y) {
           auto dydx = [&thread_metric](double* y, double* k) {
-            thread_metric.compute_metric(y[0], y[1]);
-            double r = y[0];
-            double th = y[1];
-            double phi = y[2];
-            double u_r = y[3];
-            double u_th = y[4];
-            double u_phi = y[5];
-
-            double u_uppert = std::sqrt((thread_metric.gamma11 * u_r * u_r) +
-                                   (thread_metric.gamma22 * u_th * u_th) +
-                                   (thread_metric.gamma33 * u_phi * u_phi)) /
-                              thread_metric.alpha;
-
-            double drdt = thread_metric.gamma11 * u_r / u_uppert;
-            double dthdt = thread_metric.gamma22 * u_th / u_uppert;
-            double dphidt =
-                (thread_metric.gamma33 * u_phi / u_uppert) - thread_metric.beta3;
-
-            double temp1 = (u_r * u_r * thread_metric.d_gamma11_dr) +
-                           (u_th * u_th * thread_metric.d_gamma22_dr) +
-                           (u_phi * u_phi * thread_metric.d_gamma33_dr);
-            double durdt =
-                (-thread_metric.alpha * u_uppert * thread_metric.d_alpha_dr) +
-                (u_phi * thread_metric.d_beta3_dr) - (temp1 / (2.0 * u_uppert));
-
-            double temp2 = (u_r * u_r * thread_metric.d_gamma11_dth) +
-                           (u_th * u_th * thread_metric.d_gamma22_dth) +
-                           (u_phi * u_phi * thread_metric.d_gamma33_dth);
-            double duthdt =
-                (-thread_metric.alpha * u_uppert * thread_metric.d_alpha_dth) +
-                (u_phi * thread_metric.d_beta3_dth) - temp2 / (2.0 * u_uppert);
-            double duphidt = 0;
-
-            // return std::vector<double>{drdt, dthdt, dphidt, durdt, duthdt, duphidt};
-            k[0] = drdt;
-            k[1] = dthdt;
-            k[2] = dphidt;
-            k[3] = durdt;
-            k[4] = duthdt;
-            k[5] = duphidt;
+            compute_derivatives(thread_metric, y, k);
           };
 
           double u_r = -std::sqrt(thread_metric.g_11) * std::cos(beta) * std::cos(alpha);
           double u_theta = -std::sqrt(thread_metric.g_22) * std::sin(alpha);
           double u_phi = std::sqrt(thread_metric.g_33) * std::sin(beta) * std::cos(alpha);
 
-          // std::vector<double> y0 = {r, theta, phi, u_r, u_theta, u_phi};
-          // heap allocation with unique_ptr
-          std::unique_ptr<double[]> y0 = std::make_unique<double[]>(6);
+          // heap allocation with unique_ptr // auto is std::unique_ptr<double[]>
+          auto y0 = std::make_unique<double[]>(6);
           y0[0] = r;
           y0[1] = theta;
           y0[2] = phi;
@@ -137,35 +131,26 @@ int main() {
           y0[4] = u_theta;
           y0[5] = u_phi;
 
-          // int n = 5'000;
-          // double t0 = 0.0;
-          // double t_end = 1'000;
-          // double dt = (t_end - t0) / n;
-          // std::vector<double> t_out;
-          // t_out.reserve(n);
-          // for (int k = 0; k < n; k++) {
-          //   t_out.emplace_back(t0 + k * dt);
-          // }
-
+          // diskHit
           auto stop1 = [&r_in, &r_out](const double* y) {
               return ((y[0] >= r_in && y[0] <= r_out) &&
                       (std::abs(y[1] - M_PI / 2.0) < 0.01));
           };
 
+          // fall into hole or really far out
           auto stop2 = [&r_H_tol, &r_far](const double* y) {
               return (y[0] < r_H_tol || y[0] > r_far);
           };
 
           rk45_dormand_prince rk45(6, 1.0e-12, 1.0e-12);
-          // rk45.integrate(dydx, stop1, stop2, 0.0, y0); //,true, t_out);
-          std::unique_ptr<double[]> y_out = rk45.integrate(dydx, stop1, stop2, std::move(y0));
+          rk45.integrate(dydx, stop1, stop2, y0);
 
           double Iobs = 0.0;
           if (rk45.get_brightness()) {
-            double rf = y_out[0];
-            double u_rf = -y_out[3];
-            double u_thf = -y_out[4];
-            double u_phif = -y_out[5];
+            double rf = y0[0];
+            double u_rf = -y0[3];
+            double u_thf = -y0[4];
+            double u_phif = -y0[5];
 
             double u_uppertf = std::sqrt((thread_metric.gamma11 * u_rf * u_rf) +
                                     (thread_metric.gamma22 * u_thf * u_thf) +
@@ -182,7 +167,7 @@ int main() {
             Iobs = 1.0 / (oneplusz * oneplusz * oneplusz);
           }
 
-          final_screen[resy - j - 1][i] = Iobs;
+          final_screen[(resy - j - 1) * resx + i] = Iobs;
 
           // #pragma omp critical
           // {
@@ -193,41 +178,33 @@ int main() {
     }
   } // Print EXECUTION TIME
 
-  std::cout << "Maximum iterations: " << rk45_dormand_prince::get_max_iterations() 
-            << " (across " << rk45_dormand_prince::get_total_integrations() 
-            << " integrations)\n";
-
-
-
   // NORMALIZE IMAGE DATA
   double max_intensity = 0.0;
-  for (const auto &row : final_screen) {
-    for (const auto &intensity : row) {
-      max_intensity = std::max(max_intensity, intensity);
-    }
+  // Update array access in normalization
+  for (auto &intensity : final_screen) {
+    max_intensity = std::max(max_intensity, intensity);
   }
-  printf("Max intensity: %f\n", max_intensity);
-  for (auto &row : final_screen) {
-    for (auto &intensity : row) {
-      intensity /= max_intensity;
-    }
+  
+  for (auto &intensity : final_screen) {
+    intensity /= max_intensity;
   }
 
   // APPLY HOT colormap from matlab/matplotlib
+  // https://github.com/matplotlib/matplotlib/blob/main/lib/matplotlib/_cm.py
   // _hot_data = {'red':   ((0., 0.0416, 0.0416),(0.365079, 1.000000, 1.000000),(1.0, 1.0, 1.0)),
             //  'green': ((0., 0., 0.),(0.365079, 0.000000, 0.000000),
             //            (0.746032, 1.000000, 1.000000),(1.0, 1.0, 1.0)),
             //  'blue':  ((0., 0., 0.),(0.746032, 0.000000, 0.000000),(1.0, 1.0, 1.0))} 
 
   // Write the final_screen to a ppm file
-  std::ofstream output_file("../data/bh_array.ppm");
+  std::ofstream output_file(PPM_DIR "bh_array.ppm");
   output_file << "P3\n";
   output_file << resx << " " << resy << "\n";
   output_file << "255\n";
 
   for (int i = 0; i < resy; i++) {
     for (int j = 0; j < resx; j++) {
-      double value = final_screen[i][j];
+      double value = final_screen[i * resx + j];
       int r, g, b;
       
       // Implement hot colormap
@@ -255,4 +232,47 @@ int main() {
   output_file.close();
 
   return 0;
+}
+
+// Function implementation
+inline void compute_derivatives(boyer_lindquist_metric& metric, double* y, double* k) {
+    metric.compute_metric(y[0], y[1]);
+    double r = y[0];
+    double th = y[1];
+    double phi = y[2];
+    double u_r = y[3];
+    double u_th = y[4];
+    double u_phi = y[5];
+
+    double u_uppert = std::sqrt((metric.gamma11 * u_r * u_r) +
+                               (metric.gamma22 * u_th * u_th) +
+                               (metric.gamma33 * u_phi * u_phi)) /
+                      metric.alpha;
+
+    double drdt = metric.gamma11 * u_r / u_uppert;
+    double dthdt = metric.gamma22 * u_th / u_uppert;
+    double dphidt =
+        (metric.gamma33 * u_phi / u_uppert) - metric.beta3;
+
+    double temp1 = (u_r * u_r * metric.d_gamma11_dr) +
+                   (u_th * u_th * metric.d_gamma22_dr) +
+                   (u_phi * u_phi * metric.d_gamma33_dr);
+    double durdt =
+        (-metric.alpha * u_uppert * metric.d_alpha_dr) +
+        (u_phi * metric.d_beta3_dr) - (temp1 / (2.0 * u_uppert));
+
+    double temp2 = (u_r * u_r * metric.d_gamma11_dth) +
+                   (u_th * u_th * metric.d_gamma22_dth) +
+                   (u_phi * u_phi * metric.d_gamma33_dth);
+    double duthdt =
+        (-metric.alpha * u_uppert * metric.d_alpha_dth) +
+        (u_phi * metric.d_beta3_dth) - temp2 / (2.0 * u_uppert);
+    double duphidt = 0;
+
+    k[0] = drdt;
+    k[1] = dthdt;
+    k[2] = dphidt;
+    k[3] = durdt;
+    k[4] = duthdt;
+    k[5] = duphidt;
 }
