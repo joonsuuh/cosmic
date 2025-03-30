@@ -95,9 +95,22 @@ target_link_libraries(cosmic PRIVATE
 )
 
 # CPU-only executable
-add_executable(cosmic_cpu src/bh_cpu.cpp)
+add_executable(cosmic_cpu src/cosmic_cpu.cpp)
 target_include_directories(cosmic_cpu PUBLIC include/cosmic)
 target_link_libraries(cosmic_cpu PRIVATE
+    OpenMP::OpenMP_CXX
+)
+
+# CPU-only executable with OpenGL
+add_executable(cosmic_cpu_gl src/cosmic_cpu_gl.cpp)
+target_include_directories(cosmic_cpu_gl PUBLIC
+    include/cosmic
+    external
+)
+target_link_libraries(cosmic_cpu_gl PRIVATE
+    glad
+    glfw
+    OpenGL::GL
     OpenMP::OpenMP_CXX
 )
 
@@ -106,8 +119,11 @@ target_link_libraries(cosmic_cpu PRIVATE
 #----------------------------------
 target_compile_definitions(cosmic PRIVATE SHADER_DIR="${CMAKE_SOURCE_DIR}/shaders/")
 target_compile_definitions(cosmic_cpu PRIVATE SHADER_DIR="${CMAKE_SOURCE_DIR}/shaders/")
+target_compile_definitions(cosmic_cpu_gl PRIVATE SHADER_DIR="${CMAKE_SOURCE_DIR}/shaders/")
+
 target_compile_definitions(cosmic PRIVATE PPM_DIR="${CMAKE_SOURCE_DIR}/data/")
 target_compile_definitions(cosmic_cpu PRIVATE PPM_DIR="${CMAKE_SOURCE_DIR}/data/")
+target_compile_definitions(cosmic_cpu_gl PRIVATE PPM_DIR="${CMAKE_SOURCE_DIR}/data/")
 
 ##########################
 ###### STUFF I USED ######

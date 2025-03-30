@@ -1,4 +1,4 @@
-#include "clock.h"
+#include "timer.h"
 #include "metric.h"
 #include "rk45_dp2.h"
 #include <chrono>
@@ -27,17 +27,17 @@ struct BlackHoleConfig {
   double D;       // Distance to observer
   double theta0;  // Observer inclination angle (degrees)
   double phi0;    // Observer azimuthal angle (degrees)
-  double r_in;    // Inner radius of accretion disk
-  double r_out;   // Outer radius of accretion disk
+  double innerRadius;    // Inner radius of accretion disk
+  double outerRadius;   // Outer radius of accretion disk
   double epsilon; // Integration tolerance
   double r_H;     // Event horizon radius
   double r_H_tol; // Tolerance factor for horizon detection
-  double r_far;   // Far field boundary
-  int ratiox;     // Width aspect ratio
+  double farRadius;   // Far field boundary
+  int aspectWidth;     // Width aspect ratio
   int ratioy;     // Height aspect ratio
-  int resScale;   // Resolution scale factor
-  int resx;
-  int resy;
+  int imageScale;   // Resolution scale factor
+  int pixelWidth;
+  int pixelHeight;
 };
 
 // Key callback function
@@ -50,19 +50,19 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action,
 
 // Function to calculate black hole image
 std::vector<float> calculateBlackHoleImage(const BlackHoleConfig &config) {
-  std::cout << "Calculating black hole image at resolution: " << config.resx << "x"
-            << config.resy << std::endl;
+  std::cout << "Calculating black hole image at resolution: " << config.pixelWidth << "x"
+            << config.pixelHeight << std::endl;
 
   // Initialize 2D vector for the final image
-  std::vector<float> final_screen(config.resy * config.resx, 0.0f);
+  std::vector<float> final_screen(config.pixelHeight * config.pixelWidth, 0.0f);
 
   // Screen coordinates setup
-  double x_sc = -25.0;
-  double y_sc = -12.5;
-  double y_sc0 = y_sc;
-  double stepx = std::abs(2.0 * x_sc / config.resx);
-  x_sc += 0.5 * stepx;
-  double stepy = std::abs(2.0 * y_sc / config.resy);
+  double offsetX = -25.0;
+  double offsetY = -12.5;
+  double y_sc0 = offsetY;
+  double stepX = std::abs(2.0 * offsetX / config.pixelWidth);
+  offsetX += 0.5 * stepX;
+  double stepY = std::abs(2.0 * offsetY / config.pixelHeight);
 
   // Configure OpenMP
   int max_threads = omp_get_max_threads();
@@ -81,22 +81,19 @@ std::vector<float> calculateBlackHoleImage(const BlackHoleConfig &config) {
   std::cout << "Available threads: " << max_threads << "\n"
             << "Used threads: " << using_threads << std::endl;
 
-  // Start timing
-  Clock clock;
-
 // Parallel region for ray tracing
 #pragma omp parallel
   {
     // Each thread needs its own metric instance
-    boyer_lindquist_metric local_metric(config.a, config.M);
+    BoyerLindquistMetric local_metric(config.a, config.M);
 
 // Calculate rays in parallel
 #pragma omp for collapse(2) schedule(dynamic, 16) nowait
-    for (int i = 0; i < config.resx; i++) {
-      for (int j = 0; j < config.resy; j++) {
+    for (int i = 0; i < config.pixelWidth; i++) {
+      for (int j = 0; j < config.pixelHeight; j++) {
         // Calculate screen coordinates
-        double local_x_sc = x_sc + (i * stepx);
-        double local_y_sc = y_sc0 + (j * stepy);
+        double local_x_sc = offsetX + (i * stepX);
+        double local_y_sc = y_sc0 + (j * stepY);
 
         // Calculate initial ray parameters
         double beta = local_x_sc / config.D;
@@ -105,12 +102,12 @@ std::vector<float> calculateBlackHoleImage(const BlackHoleConfig &config) {
                              (local_y_sc * local_y_sc));
         double theta = config.theta0 - alpha;
         double phi = beta;
-        local_metric.compute_metric(r, theta);
+        local_metric.computeMetric(r, theta);
 
         // Define differential equations for geodesic path
         // auto dydx = [&local_metric](double x, const std::vector<double> &y) {
         auto dydx = [&local_metric](const std::vector<double> &y) {
-          local_metric.compute_metric(y[0], y[1]);
+          local_metric.computeMetric(y[0], y[1]);
           double r = y[0];
           double th = y[1];
           double phi = y[2];
@@ -166,18 +163,18 @@ std::vector<float> calculateBlackHoleImage(const BlackHoleConfig &config) {
         auto stop_at_disk = [&config](double x, const std::vector<double> &y) {
           double r = y[0];
           double theta = y[1];
-          return ((r >= config.r_in && r <= config.r_out) &&
+          return ((r >= config.innerRadius && r <= config.outerRadius) &&
                   (std::abs(theta - M_PI / 2.0) < 0.01));
         };
 
         auto stop_at_boundary = [&config](double x,
                                           const std::vector<double> &y) {
           double r = y[0];
-          return (r < config.r_H_tol || r > config.r_far);
+          return (r < config.r_H_tol || r > config.farRadius);
         };
 
         // Perform integration
-        rk45_dormand_prince rk45(6, 1.0e-12, 1.0e-12);
+        DormandPrinceRK45 rk45(6, 1.0e-12, 1.0e-12);
         rk45.integrate(dydx, stop_at_disk, stop_at_boundary, 0.0, y0);
 
         // Calculate observed intensity
@@ -221,11 +218,10 @@ std::vector<float> calculateBlackHoleImage(const BlackHoleConfig &config) {
         }
 
         // Store result (flipping y-coordinate for image)
-        final_screen[(config.resy - j - 1) * config.resx + i] = Iobs;
+        final_screen[(config.pixelHeight - j - 1) * config.pixelWidth + i] = Iobs;
       }
     }
   }
-
   return final_screen;
 }
 
@@ -240,22 +236,24 @@ int main() {
   config.D = 500.0;                    // Distance
   config.theta0 = 85.0 * M_PI / 180.0; // Inclination angle
   config.phi0 = 0.0;                   // Azimuthal angle
-  config.r_in = 5.0 * config.M;        // Inner disk radius
-  config.r_out = 20.0 * config.M;      // Outer disk radius
+  config.innerRadius = 5.0 * config.M;        // Inner disk radius
+  config.outerRadius = 20.0 * config.M;      // Outer disk radius
   config.epsilon = 1.0e-5;             // Integration tolerance
   config.r_H = config.M + std::sqrt(config.M * config.M -
                                     config.a * config.a); // Event horizon
   config.r_H_tol = 1.01 * config.r_H; // Horizon detection tolerance
-  config.r_far = config.r_out * 50.0; // Far field boundary
-  config.ratiox = 16;                 // Width aspect ratio
+  config.farRadius = config.outerRadius * 50.0; // Far field boundary
+  config.aspectWidth = 16;                 // Width aspect ratio
   config.ratioy = 9;                  // Height aspect ratio
-  config.resScale = 10;               // Resolution scale
-  config.resx = config.ratiox * config.resScale;
-  config.resy = config.ratioy * config.resScale;
+  config.imageScale = 10;               // Resolution scale
+  config.pixelWidth = config.aspectWidth * config.imageScale;
+  config.pixelHeight = config.ratioy * config.imageScale;
 
   // Calculate black hole image
+  Timer timer;
+  timer.start("Raytracing");
   std::vector<float> image_data = calculateBlackHoleImage(config);
-
+  timer.stop();
   // Image render
   std::cout << "Raytracing complete. Rendering image...\n";
   // NORMALIZE IMAGE DATA
@@ -279,12 +277,12 @@ int main() {
   // Write the final_screen to a ppm file
   std::ofstream output_file(PPM_DIR "bh_opengl.ppm");
   output_file << "P3\n";
-  output_file << config.resx << " " << config.resy << "\n";
+  output_file << config.pixelWidth << " " << config.pixelHeight << "\n";
   output_file << "255\n";
 
-  for (int i = 0; i < config.resy; i++) {
-    for (int j = 0; j < config.resx; j++) {
-      double value = image_data[i * config.resx + j];
+  for (int i = 0; i < config.pixelHeight; i++) {
+    for (int j = 0; j < config.pixelWidth; j++) {
+      double value = image_data[i * config.pixelWidth + j];
       int r, g, b;
       
       // Implement hot colormap
@@ -356,8 +354,8 @@ int main() {
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
   // Allocate texture memory and upload image data
-  int tex_width = config.resx;
-  int tex_height = config.resy;
+  int tex_width = config.pixelWidth;
+  int tex_height = config.pixelHeight;
 
   // Convert 2D vector to 1D array for OpenGL
   // std::vector<float> flattened_data;

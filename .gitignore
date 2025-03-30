@@ -5,3 +5,4 @@ data
 
 .vscode
 .clang-format
+.DS_Store

@@ -1,4 +1,5 @@
-#pragma once
+#ifndef COSMIC_RK45_DP2_COUNT_H
+#define COSMIC_RK45_DP2_COUNT_H
 
 #include <vector>
 #include <cmath>
@@ -6,9 +7,9 @@
 #include <algorithm>
 #include <atomic>
 
-class rk45_dormand_prince {
+class DormandPrinceRK45 {
 public:
-  rk45_dormand_prince(int num_equations, double tolerance_abs, double tolerance_rel) 
+  DormandPrinceRK45(int num_equations, double tolerance_abs, double tolerance_rel) 
     : n_eq(num_equations), atol(tolerance_abs), rtol(tolerance_rel)
   {
     // Pre-allocate all vectors once in constructor
@@ -232,5 +233,7 @@ public:
 };
 
 // Initialize static members
-std::atomic<int> rk45_dormand_prince::max_iterations_count{0};
-std::atomic<int> rk45_dormand_prince::total_integrations{0};
+std::atomic<int> DormandPrinceRK45::max_iterations_count{0};
+std::atomic<int> DormandPrinceRK45::total_integrations{0};
+
+#endif // COSMIC_RK45_DP2_COUNT_H

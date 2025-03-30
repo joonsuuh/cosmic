@@ -1,6 +1,8 @@
 #include "clock.h"
 #include "metric.h"
-#include "rk45_dp2.h"
+// #include "rk45_dp2.h"
+#include "rk45dp3.h"
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <fstream>
@@ -9,6 +11,7 @@
 #include <omp.h> // Add OpenMP header
 #include <string>
 #include <vector>
+#include <utility>  // for std::move
 
 int main() {
   std::cout << "CPU version running\n";
@@ -76,7 +79,7 @@ int main() {
           local_metric.compute_metric(r, theta);
 
           // auto dydx = [&](double x, const std::vector<double> &y) {
-          auto dydx = [&](const std::vector<double> &y) {
+          auto dydx = [&local_metric](double* y, double* k) {
             local_metric.compute_metric(y[0], y[1]);
             double r = y[0];
             double th = y[1];
@@ -110,14 +113,28 @@ int main() {
                 (u_phi * local_metric.d_beta3_dth) - temp2 / (2.0 * u_uppert);
             double duphidt = 0;
 
-            return std::vector<double>{drdt, dthdt, dphidt, durdt, duthdt, duphidt};
+            // return std::vector<double>{drdt, dthdt, dphidt, durdt, duthdt, duphidt};
+            k[0] = drdt;
+            k[1] = dthdt;
+            k[2] = dphidt;
+            k[3] = durdt;
+            k[4] = duthdt;
+            k[5] = duphidt;
           };
 
           double u_r = -std::sqrt(local_metric.g_11) * std::cos(beta) * std::cos(alpha);
           double u_theta = -std::sqrt(local_metric.g_22) * std::sin(alpha);
           double u_phi = std::sqrt(local_metric.g_33) * std::sin(beta) * std::cos(alpha);
 
-          std::vector<double> y0 = {r, theta, phi, u_r, u_theta, u_phi};
+          // std::vector<double> y0 = {r, theta, phi, u_r, u_theta, u_phi};
+          // heap allocation with unique_ptr
+          std::unique_ptr<double[]> y0 = std::make_unique<double[]>(6);
+          y0[0] = r;
+          y0[1] = theta;
+          y0[2] = phi;
+          y0[3] = u_r;
+          y0[4] = u_theta;
+          y0[5] = u_phi;
 
           // int n = 5'000;
           // double t0 = 0.0;
@@ -129,27 +146,25 @@ int main() {
           //   t_out.emplace_back(t0 + k * dt);
           // }
 
-          auto stop1 = [&](double x, const std::vector<double> &y) {
-            double r = y[0];
-            double theta = y[1];
-            return ((r >= r_in && r <= r_out) &&
-                    (std::abs(theta - M_PI / 2.0) < 0.01));
+          auto stop1 = [&r_in, &r_out](const double* y) {
+              return ((y[0] >= r_in && y[0] <= r_out) &&
+                      (std::abs(y[1] - M_PI / 2.0) < 0.01));
           };
 
-          auto stop2 = [&](double x, const std::vector<double> &y) {
-            double r = y[0];
-            return (r < r_H_tol || r > r_far);
+          auto stop2 = [&r_H_tol, &r_far](const double* y) {
+              return (y[0] < r_H_tol || y[0] > r_far);
           };
 
-          rk45_dormand_prince rk45(6, 1.0e-12, 1.0e-12);
-          rk45.integrate(dydx, stop1, stop2, 0.0, y0); //,true, t_out);
+          DormandPrinceRK45 rk45(6, 1.0e-12, 1.0e-12);
+          // rk45.integrate(dydx, stop1, stop2, 0.0, y0); //,true, t_out);
+          std::unique_ptr<double[]> y_out = rk45.integrate(dydx, stop1, stop2, 0.0, std::move(y0));
 
           double Iobs = 0.0;
-          if (rk45.brightness) {
-            double rf = rk45.result.back()[0];
-            double u_rf = -rk45.result.back()[3];
-            double u_thf = -rk45.result.back()[4];
-            double u_phif = -rk45.result.back()[5];
+          if (rk45.get_brightness()) {
+            double rf = y_out[0];
+            double u_rf = -y_out[3];
+            double u_thf = -y_out[4];
+            double u_phif = -y_out[5];
 
             double u_uppertf = std::sqrt((local_metric.gamma11 * u_rf * u_rf) +
                                     (local_metric.gamma22 * u_thf * u_thf) +
@@ -167,6 +182,8 @@ int main() {
           }
 
           final_screen[resy - j - 1][i] = Iobs;
+
+          
         }
       }
     }

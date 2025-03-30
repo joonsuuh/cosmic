@@ -1,12 +1,13 @@
-#pragma once
+#ifndef COSMIC_RK45_DP_H
+#define COSMIC_RK45_DP_H
 
 #include <cmath>
 #include <iostream>
 #include <vector>
 
-class rk45_dormand_prince {
+class DormandPrinceRK45 {
 public:
-  rk45_dormand_prince(int num_equations, double tolerance_abs,
+  DormandPrinceRK45(int num_equations, double tolerance_abs,
                       double tolerance_rel) {
     // constructor, initialize the data members
     n_eq = num_equations;
@@ -268,3 +269,5 @@ public:
   const double d6 = -1453857185.0 / 822651844.0;
   const double d7 = 69997945.0 / 29380423.0;
 };
+
+#endif // COSMIC_RK45_DP_H

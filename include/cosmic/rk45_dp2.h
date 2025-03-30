@@ -1,13 +1,13 @@
-#pragma once
+#ifndef COSMIC_RK45_DP2_H
+#define COSMIC_RK45_DP2_H
 
 #include <vector>
 #include <cmath>
-#include <iostream>
 #include <algorithm>
 
-class rk45_dormand_prince {
+class DormandPrinceRK45 {
 public:
-  rk45_dormand_prince(int num_equations, double tolerance_abs, double tolerance_rel) 
+  DormandPrinceRK45(int num_equations, double tolerance_abs, double tolerance_rel) 
     : n_eq(num_equations), atol(tolerance_abs), rtol(tolerance_rel)
   {
     // Pre-allocate all vectors once in constructor
@@ -214,3 +214,5 @@ public:
   static constexpr double e6 = 22.0 / 525.0;
   static constexpr double e7 = -1.0 / 40.0;
 };
+
+#endif // COSMIC_RK45_DP2_H

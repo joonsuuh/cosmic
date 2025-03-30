@@ -1,5 +1,14 @@
 #!/usr/bin/env zsh 
 
+# 
+# LIST OF CPP FILES TO COMPILE
+# make directory list 
+FILE_PATHS=(
+    "src/bh_gl_omp.cpp"
+    "src/cosmic_cpu.cpp"
+    "src/cosmic_cpu_gl.cpp"
+)
+
 #
 # Configuration
 #
@@ -16,7 +25,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         --help|-h)
             # Show usage information
-            echo "Usage: ./manual.sh [--compiler=<g++-14|clang++>]"
+            echo "Usage: ./compile.sh [--compiler=<g++-14|clang++>]"
             exit 0
             ;;
     esac
@@ -45,37 +54,46 @@ if [[ $(uname) == "Darwin" ]]; then
     STD_FLAG="std=c++17"
     OPT_FLAG="O3"
 
-    # OpenGL version
-    if [[ $compiler == "clang++" ]]; then
-        # Three-step compilation with clang/clang++:
-        # 1. Compile glad.c to object file
-        clang -O3 -c $GLAD_C -o bin/glad.o -Iexternal
+    # Compile each file in the FILE_PATHS array
+    for source_file in "${FILE_PATHS[@]}"; do
+        # Extract the base name without extension
+        base_name=$(basename "$source_file" .cpp)
+        output_name="bin/$base_name"
         
-        # 2. Compile main source to object file
-        clang++ -c src/bh_gl_omp.cpp -o bin/bh_gl_omp.o \
-            -$STD_FLAG $INCLUDES
-
-        # 3. Link object files
-        clang++ bin/bh_gl_omp.o bin/glad.o -o bin/cosmic \
-            $LIBS -lomp -lglfw \
-            -framework OpenGL -framework Cocoa -framework IOKit \
-            -$OPT_FLAG -Xpreprocessor -fopenmp
-    else
-        # Single-step compilation with g++-14
-        $compiler src/bh_gl_omp.cpp $GLAD_C \
-            -$STD_FLAG -o bin/cosmic \
-            -Iinclude/cosmic -Iexternal \
-            -I$GL_INC -L$GL_LIB \
-            -I$OMP_INC -L$OMP_LIB \
-            -lglfw -lomp \
-            -framework OpenGL -framework Cocoa -framework IOKit \
-            -$OPT_FLAG -fopenmp
-    fi
-
-    # CPU version (simplified)
-    $compiler  -O3 src/bh_cpu.cpp \
-        -o bin/cosmic_cpu \
-        -Iinclude/cosmic $([[ $compiler == "clang++" ]] && echo "-Xpreprocessor") -fopenmp
+        echo "Compiling $source_file to $output_name"
+        
+        # Determine if this file needs OpenGL (GLAD)
+        if [[ "$source_file" == *"gl"* ]]; then
+            # File needs OpenGL
+            if [[ $compiler == "clang++" ]]; then
+                # Compile with clang++ in multiple steps
+                clang -O3 -c $GLAD_C -o bin/glad.o -Iexternal
+                
+                clang++ -c $source_file -o "bin/${base_name}.o" \
+                    -$STD_FLAG $INCLUDES
+                
+                clang++ "bin/${base_name}.o" bin/glad.o -o "$output_name" \
+                    $LIBS -lomp -lglfw \
+                    -framework OpenGL -framework Cocoa -framework IOKit \
+                    -$OPT_FLAG -Xpreprocessor -fopenmp
+            else
+                # Compile with g++ in one step
+                $compiler $source_file $GLAD_C \
+                    -$STD_FLAG -o "$output_name" \
+                    -Iinclude/cosmic -Iexternal \
+                    -I$GL_INC -L$GL_LIB \
+                    -I$OMP_INC -L$OMP_LIB \
+                    -lglfw -lomp \
+                    -framework OpenGL -framework Cocoa -framework IOKit \
+                    -$OPT_FLAG -fopenmp
+            fi
+        else
+            # CPU-only version
+            $compiler -$OPT_FLAG $source_file \
+                -o "$output_name" \
+                -Iinclude/cosmic $([[ $compiler == "clang++" ]] && echo "-Xpreprocessor") -fopenmp
+        fi
+    done
 
 elif [[ $(uname) == "Linux" ]]; then
     echo "Compiling for Linux:: NOT YET"

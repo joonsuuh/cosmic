@@ -1,10 +1,12 @@
-#pragma once
+#ifndef COSMIC_SHADER_H
+#define COSMIC_SHADER_H
 
 #include <glad/glad.h>
 #include <string>
 #include <fstream>
 #include <sstream>
 #include <iostream>
+#include <cmath> // Add this include for trigonometric functions
 
 #ifndef SHADER_DIR
 	// If SHADER_DIR is not defined (in cmake)
@@ -125,3 +127,5 @@ public:
 		glUniform1f(vertexLocation, offset);
 	}
 };
+
+#endif // COSMIC_SHADER_H

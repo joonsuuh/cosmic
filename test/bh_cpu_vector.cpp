@@ -1,4 +1,4 @@
-#include "clock.h"
+#include "timer.h"
 #include "metric.h"
 #include "rk45_dp2.h"
 #include <chrono>
@@ -52,8 +52,10 @@ int main() {
 
   // Parallel region
   {
-    Clock clock;
+    Timer timer;
+    timer.start("COMPUTING PIXEL INTENSITY");
 
+    // Parallel region for ray tracing
 #pragma omp parallel
     {
       // Each thread needs its own metric instance to avoid race conditions
@@ -141,7 +143,7 @@ int main() {
             return (r < r_H_tol || r > r_far);
           };
 
-          rk45_dormand_prince rk45(6, 1.0e-12, 1.0e-12);
+          DormandPrinceRK45 rk45(6, 1.0e-12, 1.0e-12);
           rk45.integrate(dydx, stop1, stop2, 0.0, y0); //,true, t_out);
 
           double Iobs = 0.0;
@@ -170,11 +172,8 @@ int main() {
         }
       }
     }
+    timer.stop();
   } // Print EXECUTION TIME
-
-  std::cout << "Maximum iterations: " << rk45_dormand_prince::get_max_iterations() 
-            << " (across " << rk45_dormand_prince::get_total_integrations() 
-            << " integrations)\n";
 
   // NORMALIZE IMAGE DATA
   double max_intensity = 0.0;
