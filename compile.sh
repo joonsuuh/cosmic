@@ -4,7 +4,6 @@
 # LIST OF CPP FILES TO COMPILE
 # make directory list 
 FILE_PATHS=(
-    "src/bh_gl_omp.cpp"
     "src/cosmic_cpu.cpp"
     "src/cosmic_cpu_gl.cpp"
 )

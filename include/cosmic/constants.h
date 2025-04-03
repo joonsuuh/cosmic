@@ -10,22 +10,22 @@
 
 namespace Constants {
     // Math constants
-    constexpr double PI = M_PI;
-    constexpr double HALF_PI = M_PI / 2.0;
-    constexpr double TWO_PI = 2.0 * M_PI;
-    constexpr double DEG_TO_RAD = M_PI / 180.0;
-    constexpr double RAD_TO_DEG = 180.0 / M_PI;
+    constexpr float PI = M_PI;
+    constexpr float HALF_PI = M_PI / 2.0;
+    constexpr float TWO_PI = 2.0 * M_PI;
+    constexpr float DEG_TO_RAD = M_PI / 180.0;
+    constexpr float RAD_TO_DEG = 180.0 / M_PI;
     
     // Black hole parameters
     namespace BlackHole {
-        constexpr double DEFAULT_SPIN = 0.99;
-        constexpr double DEFAULT_MASS = 1.0;
-        constexpr double DEFAULT_DISTANCE = 500.0;
-        constexpr double DEFAULT_OBSERVER_THETA = 85.0 * DEG_TO_RAD;
-        constexpr double DEFAULT_OBSERVER_PHI = 0.0;
-        constexpr double DEFAULT_INNER_RADIUS = 5.0;
-        constexpr double DEFAULT_OUTER_RADIUS = 20.0;
-        constexpr double DEFAULT_FAR_RADIUS = 1000.0;
+        constexpr float DEFAULT_SPIN = 0.99f;
+        constexpr float DEFAULT_MASS = 1.0f;
+        constexpr float DEFAULT_DISTANCE = 500.0f;
+        constexpr float DEFAULT_OBSERVER_THETA = 85.0f * DEG_TO_RAD;
+        constexpr float DEFAULT_OBSERVER_PHI = 0.0f;
+        constexpr float DEFAULT_INNER_RADIUS = 5.0f;
+        constexpr float DEFAULT_OUTER_RADIUS = 20.0f;
+        constexpr float DEFAULT_FAR_RADIUS = 600.0f;
     }
     
     // Image parameters
@@ -33,23 +33,24 @@ namespace Constants {
         constexpr int DEFAULT_ASPECT_WIDTH = 16;
         constexpr int DEFAULT_ASPECT_HEIGHT = 9;
         constexpr int DEFAULT_IMAGE_SCALE = 10;
-        constexpr double DEFAULT_CAMERA_SCALE = 1.5;
+        constexpr float DEFAULT_CAMERA_SCALE = 1.5f;
     }
     
     // Integration parameters
     namespace Integration {
-        constexpr double ABS_TOLERANCE = 1.0e-12;
-        constexpr double REL_TOLERANCE = 1.0e-12;
-        constexpr double DISK_TOLERANCE = 0.01;
-        constexpr double INITIAL_STEP_SIZE = 0.1;
-        constexpr double MIN_STEP_SIZE = 1.0e-10;
-        constexpr double MAX_STEP_SIZE = 1.0;
+        constexpr float ABS_TOLERANCE = 1.0e-8f;
+        constexpr float REL_TOLERANCE = 1.0e-4f;
+        constexpr float DISK_TOLERANCE = 0.01f;
+        constexpr float INITIAL_STEP_SIZE = 0.1f;
+        constexpr float MIN_STEP_SIZE = 1.0e-8f;
+        constexpr float MAX_STEP_SIZE = 0.1f;
+        constexpr int MAX_ITERATIONS = 10000;
     }
     
     // Image output parameters
     namespace ColorMap {
-        constexpr double RED_THRESHOLD = 0.365079;
-        constexpr double YELLOW_THRESHOLD = 0.746032;
+        constexpr float RED_THRESHOLD = 0.365079f;
+        constexpr float YELLOW_THRESHOLD = 0.746032f;
     }
 
     // Output default parameters

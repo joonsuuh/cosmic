@@ -32,7 +32,7 @@ enum ThreadCount {
   kSingle,
   kManual = 10
 };
-static inline int numThreads = ThreadCount::kDefault;
+static inline int numThreads = ThreadCount::kManual;
 
 // ===== FORWARD DECLARATIONS =====
 // OpenMP functions
@@ -43,10 +43,10 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void processInput(GLFWwindow* window);
 
 // Image processing functions
-void normalizeScreenBuffer(float* screenBuffer, int numPixels);
-void applyColormap(float value, int& r, int& g, int& b);
-void writeImageToFile(const std::string& filename, float* screenBuffer, int pixelWidth, int pixelHeight);
-void applyHotColorMap(float value, unsigned int& r, unsigned int& g, unsigned int& b);
+void normalizeScreenBuffer(double* screenBuffer, int numPixels);
+void applyColormap(double value, int& r, int& g, int& b);
+void writeImageToFile(const std::string& filename, double* screenBuffer, int pixelWidth, int pixelHeight);
+void applyHotColorMap(double value, unsigned int& r, unsigned int& g, unsigned int& b);
 
 // Output functions
 inline void printDisplayResolution(int pixelWidth, int pixelHeight);
@@ -54,7 +54,7 @@ inline void printBufferSize(int numPixels);
 inline void printNumberOfThreads();
 
 // Ray tracing functions
-void performRayTracing(RayTracer& rayTracer, float* screenBuffer, 
+void performRayTracing(RayTracer& rayTracer, double* screenBuffer, 
                       const Config::BlackHole& bhConfig,
                       int pixelWidth, int pixelHeight, Timer& timer);
 
@@ -69,7 +69,7 @@ int main(int argc, char* argv[]) {
   
   Config::Image imgConfig;
   imgConfig.setAspectRatio(16, 9);
-  imgConfig.scale = 12;
+  imgConfig.scale = 10;
   // imgConfig.cameraScale = 1.5;
  
   // Set up output configuration
@@ -88,7 +88,7 @@ int main(int argc, char* argv[]) {
   const int numPixels = imgConfig.numPixels();
   
   // Allocate screen buffer
-  float* screenBuffer = new float[numPixels]{}; // 1D row-major order
+  double* screenBuffer = new double[numPixels]{}; // 1D row-major order
   timer.stop();
 
   // ===== OUTPUT CONFIG =====
@@ -107,11 +107,13 @@ int main(int argc, char* argv[]) {
   normalizeScreenBuffer(screenBuffer, numPixels);
   timer.stop();
 
-  // Convert float buffer to float buffer for OpenGL compatibility
+  // Convert double buffer to float buffer for OpenGL compatibility
   timer.start("APPLYING COLOR MAP + MOVING TO FLOAT BUFFER");
   float* floatBuffer {new float[numPixels * 3]{}}; // RGB values (3 channels)
   unsigned int r, g, b;
   for (int i = 0; i < numPixels; i++) {
+    // Apply the hot colormap to get RGB values
+    // applyHotColorMap(screenBuffer[i], r, g, b); 
     r = g = b = static_cast<unsigned int>(screenBuffer[i] * 255.0f); // Grayscale for now
     
     // Store normalized RGB values (0.0-1.0) in the float buffer
@@ -277,25 +279,20 @@ int main(int argc, char* argv[]) {
 }
 
 // ===== RAY TRACING FUNCTIONS =====
-void performRayTracing(RayTracer& rayTracer, float* screenBuffer, 
+void performRayTracing(RayTracer& rayTracer, double* screenBuffer, 
                       const Config::BlackHole& bhConfig,
                       int pixelWidth, int pixelHeight, Timer& timer) {
   #pragma omp parallel
   {
     // Each thread needs its own metric, integrator, and ray
     BoyerLindquistMetric thread_metric(bhConfig.spin, bhConfig.mass);
-    DormandPrinceRK45 integrator(6, Constants::Integration::ABS_TOLERANCE,
-                            Constants::Integration::REL_TOLERANCE,
-                            Constants::Integration::MIN_STEP_SIZE,
-                            Constants::Integration::MAX_STEP_SIZE,
-                            Constants::Integration::INITIAL_STEP_SIZE,
-                            Constants::Integration::MAX_ITERATIONS);
-    float* y {new float[6]{}};
+    DormandPrinceRK45 integrator(6, Constants::Integration::ABS_TOLERANCE, Constants::Integration::REL_TOLERANCE);
+    double* y {new double[6]{}};
     
     #pragma omp for collapse(2) schedule(dynamic) nowait
     for (int i = 0; i < pixelWidth; i++) {
       for (int j = 0; j < pixelHeight; j++) {
-        float intensity = 0.0;
+        double intensity = 0.0;
         
         // Trace the ray and get intensity with the thread-local integrator
         if (rayTracer.traceRay(i, j, thread_metric, integrator, y, intensity)) {
@@ -308,8 +305,8 @@ void performRayTracing(RayTracer& rayTracer, float* screenBuffer,
 }
 
 // ===== IMAGE PROCESSING FUNCTIONS =====
-void normalizeScreenBuffer(float* screenBuffer, int numPixels) {
-  float max_intensity = 0.0;
+void normalizeScreenBuffer(double* screenBuffer, int numPixels) {
+  double max_intensity = 0.0;
 
   // First pass: find max intensity
   for (int i = 0; i < numPixels; i++) {
@@ -347,10 +344,10 @@ void normalizeScreenBuffer(float* screenBuffer, int numPixels) {
  *        (0.746032 , 0.0     , 0.0  ),
  *        (1.0      , 1.0     , 1.0  ) 
  */
-void applyHotColorMap(float value, unsigned int& r, unsigned int& g, unsigned int& b) {
+void applyHotColorMap(double value, unsigned int& r, unsigned int& g, unsigned int& b) {
   // Define colormap thresholds
-  const float RED_THRESHOLD = 0.365079;    // Threshold for black to red
-  const float YELLOW_THRESHOLD = 0.746032; // Threshold for red to yellow
+  const double RED_THRESHOLD = 0.365079;    // Threshold for black to red
+  const double YELLOW_THRESHOLD = 0.746032; // Threshold for red to yellow
 
   // Implement hot colormap
   if (value < RED_THRESHOLD) {
@@ -372,7 +369,7 @@ void applyHotColorMap(float value, unsigned int& r, unsigned int& g, unsigned in
 }
 
 // Write image to PPM file
-void writeImageToFile(const std::string& filename, float* screenBuffer, int pixelWidth, int pixelHeight) {
+void writeImageToFile(const std::string& filename, double* screenBuffer, int pixelWidth, int pixelHeight) {
   std::ofstream outputFile(filename);
   outputFile << "P3\n";
   outputFile << pixelWidth << " " << pixelHeight << "\n";
@@ -380,7 +377,7 @@ void writeImageToFile(const std::string& filename, float* screenBuffer, int pixe
 
   for (int i = 0; i < pixelHeight; i++) {
     for (int j = 0; j < pixelWidth; j++) {
-      float value = screenBuffer[i * pixelWidth + j];
+      double value = screenBuffer[i * pixelWidth + j];
       unsigned int r, g, b;
 
       applyHotColorMap(value, r, g, b);  // Uncomment this line
@@ -420,7 +417,7 @@ inline void printDisplayResolution(int pixelWidth, int pixelHeight) {
 
 inline void printBufferSize(int numPixels) {
   std::cout << "Buffer Size: " << numPixels << " pixels" << "\n"
-            << "Buffer Size: " << numPixels * sizeof(float) / (1024.0 * 1024.0) << " MB" << std::endl;
+            << "Buffer Size: " << numPixels * sizeof(double) / (1024.0 * 1024.0) << " MB" << std::endl;
 }
 
 inline void printNumberOfThreads() {

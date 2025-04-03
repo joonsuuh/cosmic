@@ -7,27 +7,21 @@
 // Modern C++ approach using template interfaces
 class DormandPrinceRK45 {
 public:
-    DormandPrinceRK45(int num_equations, float tolerance_abs, float tolerance_rel,
-                      float hmin, float hmax, float initial_step, int max_iter)
+    DormandPrinceRK45(int num_equations, double tolerance_abs, double tolerance_rel) 
       : N(num_equations)
       , atol(tolerance_abs)
       , rtol(tolerance_rel)
-      , hmin(hmin)
-      , hmax(hmax)
-      , h(initial_step)
-      , max_iter(max_iter)
+    {
       // Raw pointer allocation
-      , k1 {new float[static_cast<size_t>(N)]{}}
-      , k2 {new float[static_cast<size_t>(N)]{}}
-        , k3 {new float[static_cast<size_t>(N)]{}}
-        , k4 {new float[static_cast<size_t>(N)]{}}
-        , k5 {new float[static_cast<size_t>(N)]{}}
-        , k6 {new float[static_cast<size_t>(N)]{}}
-        , k7 {new float[static_cast<size_t>(N)]{}}
-        , y_err {new float[static_cast<size_t>(N)]{}}
-        , y_next {new float[static_cast<size_t>(N)]{}}
-
-    {      
+      k1 = new double[static_cast<size_t>(N)]{};
+      k2 = new double[static_cast<size_t>(N)]{};
+      k3 = new double[static_cast<size_t>(N)]{};
+      k4 = new double[static_cast<size_t>(N)]{};
+      k5 = new double[static_cast<size_t>(N)]{};
+      k6 = new double[static_cast<size_t>(N)]{};
+      k7 = new double[static_cast<size_t>(N)]{};
+      y_err = new double[static_cast<size_t>(N)]{};
+      y_next = new double[static_cast<size_t>(N)]{};
     }
 
     // Destructor to clean up allocated memory
@@ -50,15 +44,15 @@ public:
     DormandPrinceRK45& operator=(DormandPrinceRK45&&) = delete;
 
     // Custom inline functions for performance
-    inline float max_val(float a, float b) {
+    inline double max_val(double a, double b) {
         return a > b ? a : b;
     }
     
-    inline float clamp_val(float value, float min_val, float max_val) {
+    inline double clamp_val(double value, double min_val, double max_val) {
         return value < min_val ? min_val : (value > max_val ? max_val : value);
     }
 
-    inline float min_val(float a, float b) {
+    inline double min_val(double a, double b) {
         return a < b ? a : b;
     }
 
@@ -69,19 +63,16 @@ public:
     bool integrate(DerivativeFunctor& derivFunctor, 
                   HitFunctor& hitFunctor,
                   BoundaryFunctor& boundaryFunctor,
-                  float* y) {
-        h = 0.1;
-        float err = 1.0f;
-        float err_prev = 1.0f;
+                  double* y) {
+        double h = 0.1;
+        double err = 1.0;
+        double err_prev = 1.0;
         // bool hit_detected = false; // Local variable instead of class member
 
         // First same as last (FSAL) so k1 <- k7 
         derivFunctor(y, k1);
         
-	int iterations {0};
-
         while (!boundaryFunctor(y)) {
-	    iterations++;
             step(derivFunctor, h, y);
             err = max_val(error(), hmin);
             
@@ -92,7 +83,7 @@ public:
                 }
                 
                 // raw pointer swap for k1 <- k7
-                float* temp = k1;
+                double* temp = k1;
                 k1 = k7;
                 k7 = temp;
 
@@ -106,19 +97,19 @@ public:
             }
             if (err_prev < 1.0) {
                 // PI controller step size adjustment for good step size
-                h = h * S * std::powf(err, -alpha) * std::powf(err_prev, beta);
+                h = h * S * std::pow(err, -alpha) * std::pow(err_prev, beta);
             } else {
                 // Reject step and reduce step size
-                h = min_val(h * S / std::powf(err, 0.2), h);
+                h = min_val(h * S / std::pow(err, 0.2), h);
             }
             h = clamp_val(h, hmin, hmax);
         }
-	std::cout << "Iterations: " << iterations << std::endl;
+        
         return false; // Return false if no hit detected
     }
 
     template <typename DerivativeFunction>
-    void step(DerivativeFunction& derivFunc, float h, const float* y) {  // Removed const from h
+    void step(DerivativeFunction& derivFunc, double h, const double* y) {  // Removed const from h
         // step 2 (step 1 is already done outside)
         for(int i = 0; i < N; i++) {
             y_next[i] = y[i] + h * a21 * k1[i];
@@ -164,81 +155,76 @@ public:
         }
     }
 
-    float error() {
-        float err_sum = 0.0;
+    inline double error() {
+        double err_sum = 0.0;
         for (int i = 0; i < N; i++) {
-            float e = y_err[i] / (atol + max_val(std::fabs(y_next[i]), std::fabs(y_next[i])) * rtol);
+            double e = y_err[i] / (atol + max_val(std::abs(y_next[i]), std::abs(y_next[i])) * rtol);
             err_sum += e * e;
         }
-        return std::sqrtf(err_sum / N);
+        return std::sqrt(err_sum / N);
     }
 
 private:
     // initial stuff
     const int N;
-    const float atol, rtol;
+    const double atol, rtol;
 
     // dynamic array allocation 
-    float* k1{}; // same as k1{nullptr} for safety
-    float* k2{};
-    float* k3{};
-    float* k4{};
-    float* k5{};
-    float* k6{};
-    float* k7{};
-    float* y_err{};
-    float* y_next{};
+    double* k1{}; // same as k1{nullptr} for safety
+    double* k2{};
+    double* k3{};
+    double* k4{};
+    double* k5{};
+    double* k6{};
+    double* k7{};
+    double* y_err{};
+    double* y_next{};
 
     // clamp values
-    const float hmin{ 1.0e-8f};
-    const float hmax{ 0.1f};
-    float h{ 0.1f}; // initial step size
-    const int max_iter{ 10000}; // max iterations
-    // PI controller parameters
-    float err{ 1.0f}; // error
-    float err_prev{ 1.0f}; // previous error
-    
+    static constexpr double hmin = 1.0e-10;
+    static constexpr double hmax = 1.0;
+
     // Adaptive step size constants
-    static constexpr float S = 0.9f;  // Safety factor
-    static constexpr float alpha = 0.7/5.0;  // PI controller parameters
-    static constexpr float beta = 0.4/5.0;
+    static constexpr double S = 0.9;  // Safety factor
+    static constexpr double alpha = 0.7/5.0;  // PI controller parameters
+    static constexpr double beta = 0.4/5.0;
 
     // Butcher tableau constants - made static to avoid recalculation
-    static constexpr float c2 = 1.0 / 5.0;
-    static constexpr float c3 = 3.0 / 10.0;
-    static constexpr float c4 = 4.0 / 5.0;
-    static constexpr float c5 = 8.0 / 9.0;
+    static constexpr double c2 = 1.0 / 5.0;
+    static constexpr double c3 = 3.0 / 10.0;
+    static constexpr double c4 = 4.0 / 5.0;
+    static constexpr double c5 = 8.0 / 9.0;
 
-    static constexpr float a21 = 1.0 / 5.0;
-    static constexpr float a31 = 3.0 / 40.0;
-    static constexpr float a32 = 9.0 / 40.0;
-    static constexpr float a41 = 44.0 / 45.0;
-    static constexpr float a42 = -56.0 / 15.0;
-    static constexpr float a43 = 32.0 / 9.0;
-    static constexpr float a51 = 19372.0 / 6561.0;
-    static constexpr float a52 = -25360.0 / 2187.0;
-    static constexpr float a53 = 64448.0 / 6561.0;
-    static constexpr float a54 = -212.0 / 729.0;
-    static constexpr float a61 = 9017.0 / 3168.0;
-    static constexpr float a62 = -355.0 / 33.0;
-    static constexpr float a63 = 46732.0 / 5247.0;
-    static constexpr float a64 = 49.0 / 176.0;
-    static constexpr float a65 = -5103.0 / 18656.0;
+    static constexpr double a21 = 1.0 / 5.0;
+    static constexpr double a31 = 3.0 / 40.0;
+    static constexpr double a32 = 9.0 / 40.0;
+    static constexpr double a41 = 44.0 / 45.0;
+    static constexpr double a42 = -56.0 / 15.0;
+    static constexpr double a43 = 32.0 / 9.0;
+    static constexpr double a51 = 19372.0 / 6561.0;
+    static constexpr double a52 = -25360.0 / 2187.0;
+    static constexpr double a53 = 64448.0 / 6561.0;
+    static constexpr double a54 = -212.0 / 729.0;
+    static constexpr double a61 = 9017.0 / 3168.0;
+    static constexpr double a62 = -355.0 / 33.0;
+    static constexpr double a63 = 46732.0 / 5247.0;
+    static constexpr double a64 = 49.0 / 176.0;
+    static constexpr double a65 = -5103.0 / 18656.0;
 
-    static constexpr float a71 = 35.0 / 384.0;
-    static constexpr float a72 = 0.0;
-    static constexpr float a73 = 500.0 / 1113.0;
-    static constexpr float a74 = 125.0 / 192.0;
-    static constexpr float a75 = -2187.0 / 6784.0;
-    static constexpr float a76 = 11.0 / 84.0;
+    static constexpr double a71 = 35.0 / 384.0;
+    static constexpr double a72 = 0.0;
+    static constexpr double a73 = 500.0 / 1113.0;
+    static constexpr double a74 = 125.0 / 192.0;
+    static constexpr double a75 = -2187.0 / 6784.0;
+    static constexpr double a76 = 11.0 / 84.0;
 
-    static constexpr float e1 = 71.0 / 57600.0;
-    static constexpr float e2 = 0.0;
-    static constexpr float e3 = -71.0 / 16695.0;
-    static constexpr float e4 = 71.0 / 1920.0;
-    static constexpr float e5 = -17253.0 / 339200.0;
-    static constexpr float e6 = 22.0 / 525.0;
-    static constexpr float e7 = -1.0 / 40.0;
+    static constexpr double e1 = 71.0 / 57600.0;
+    static constexpr double e2 = 0.0;
+    static constexpr double e3 = -71.0 / 16695.0;
+    static constexpr double e4 = 71.0 / 1920.0;
+    static constexpr double e5 = -17253.0 / 339200.0;
+    static constexpr double e6 = 22.0 / 525.0;
+    static constexpr double e7 = -1.0 / 40.0;
 };
 
 #endif // COSMIC_DORMAND_PRINCE_H

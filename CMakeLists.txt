@@ -1,8 +1,9 @@
 cmake_minimum_required(VERSION 3.10)
 
-#----------------------------------
-# Compiler and Standard B4 Project
-#----------------------------------
+########################################
+# Compiler and Standards
+########################################
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 option(USE_CLANG "Build with Clang compiler" OFF)
@@ -25,14 +26,22 @@ endif()
 message(STATUS "C compiler: ${CMAKE_C_COMPILER}")
 message(STATUS "C++ compiler: ${CMAKE_CXX_COMPILER}")
 
-project(cosmic)
+# Enable CUDA support
+option(WITH_CUDA "Build with CUDA support" ON)
 
-#----------------------------------
+project(cosmic LANGUAGES CXX C CUDA)
+if(WITH_CUDA)
+    # Add CUDA language support if enabled
+    # enable_language(CUDA)
+    message(STATUS "CUDA support enabled")
+endif()
+
+########################################
 # Platform-specific Configuration
-#----------------------------------
+########################################
+
 set(HOMEBREW_PATH /opt/homebrew)
 
-message(STATUS "CXX FLAGS: ${CMAKE_CXX_FLAGS}")
 if(APPLE)
     # Apple clang shenanigans
     if(USE_CLANG)
@@ -53,10 +62,31 @@ elseif(UNIX)
     set(OpenGL_GL_PREFERENCE "GLVND")
     set(CMAKE_CXX_FLAGS "-O3 -fopenmp")
 endif()
+message(STATUS "CXX FLAGS: ${CMAKE_CXX_FLAGS}")
 
-#----------------------------------
+########################################
+# CUDA Configuration
+########################################
+
+if(WITH_CUDA)
+    # Set CUDA architecture flags - modify as needed for your GPU
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --resource-usage -O3")
+    
+    # Set architecture based on compute capability
+    set(CMAKE_CUDA_ARCHITECTURES "89")
+    
+    # Set up CUDA standard compatibility with C++ standard
+    set(CMAKE_CUDA_STANDARD ${CMAKE_CXX_STANDARD})
+    set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+    
+    message(STATUS "CUDA architectures: ${CMAKE_CUDA_ARCHITECTURES}")
+    message(STATUS "CUDA flags: ${CMAKE_CUDA_FLAGS}")
+endif()
+
+########################################
 # Dependencies
-#----------------------------------
+########################################
+
 find_package(OpenMP REQUIRED)
 find_package(OpenGL REQUIRED)
 find_package(glfw3 REQUIRED)
@@ -65,9 +95,10 @@ find_package(glfw3 REQUIRED)
 add_library(glad STATIC external/src/glad.c)
 target_include_directories(glad PUBLIC external)
 
-#----------------------------------
+########################################
 # Project Structure
-#----------------------------------
+########################################
+
 # Create required directories
 if(NOT EXISTS ${CMAKE_SOURCE_DIR}/bin)
     file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
@@ -78,21 +109,22 @@ endif()
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
 
-#----------------------------------
+########################################
 # Targets
-#----------------------------------
+########################################
+
 # Main executable
-add_executable(cosmic src/bh_gl_omp.cpp)
-target_include_directories(cosmic PUBLIC 
-    include/cosmic
-    external
-)
-target_link_libraries(cosmic PRIVATE
-    glad
-    glfw
-    OpenGL::GL
-    OpenMP::OpenMP_CXX
-)
+# add_executable(cosmic src/bh_gl_omp.cpp)
+# target_include_directories(cosmic PUBLIC 
+#     include/cosmic
+#     external
+# )
+# target_link_libraries(cosmic PRIVATE
+#     glad
+#     glfw
+#     OpenGL::GL
+#     OpenMP::OpenMP_CXX
+# )
 
 # CPU-only executable
 add_executable(cosmic_cpu src/cosmic_cpu.cpp)
@@ -114,20 +146,36 @@ target_link_libraries(cosmic_cpu_gl PRIVATE
     OpenMP::OpenMP_CXX
 )
 
-#----------------------------------
+# CUDA-accelerated executable
+if(WITH_CUDA)
+    add_executable(cosmic_cuda src/cosmic_cuda.cu)
+    target_include_directories(cosmic_cuda PUBLIC include/cosmic)
+    target_link_libraries(cosmic_cuda PRIVATE)
+    
+    # Set output directory for CUDA executable
+    set_target_properties(cosmic_cuda PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin
+    )
+    
+    # Add CUDA-specific definitions
+    target_compile_definitions(cosmic_cuda PRIVATE PPM_DIR="${CMAKE_SOURCE_DIR}/data/")
+endif()
+
+########################################
 # Definitions
-#----------------------------------
-target_compile_definitions(cosmic PRIVATE SHADER_DIR="${CMAKE_SOURCE_DIR}/shaders/")
+########################################
+
+# target_compile_definitions(cosmic PRIVATE SHADER_DIR="${CMAKE_SOURCE_DIR}/shaders/")
 target_compile_definitions(cosmic_cpu PRIVATE SHADER_DIR="${CMAKE_SOURCE_DIR}/shaders/")
 target_compile_definitions(cosmic_cpu_gl PRIVATE SHADER_DIR="${CMAKE_SOURCE_DIR}/shaders/")
 
-target_compile_definitions(cosmic PRIVATE PPM_DIR="${CMAKE_SOURCE_DIR}/data/")
+# target_compile_definitions(cosmic PRIVATE PPM_DIR="${CMAKE_SOURCE_DIR}/data/")
 target_compile_definitions(cosmic_cpu PRIVATE PPM_DIR="${CMAKE_SOURCE_DIR}/data/")
 target_compile_definitions(cosmic_cpu_gl PRIVATE PPM_DIR="${CMAKE_SOURCE_DIR}/data/")
 
-##########################
+########################################
 ###### STUFF I USED ######
-##########################
+########################################
 
 # glfw3 lib 
 # wsl2 ubuntu: `sudo apt install libglfw3-dev`

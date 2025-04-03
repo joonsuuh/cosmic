@@ -6,29 +6,29 @@
 class BoyerLindquistMetric {
 public:
     // Black hole parameters
-    const float a; // Spin
-    const float M; // Mass
+    const double a; // Spin
+    const double M; // Mass
     
     // Metric components
-    float alpha, beta3;
-    float gamma11, gamma22, gamma33; // components of upper gamma^ij
-    float g_00, g_03, g_11, g_22, g_33; // components of lower g_\mu\nu
+    double alpha, beta3;
+    double gamma11, gamma22, gamma33; // components of upper gamma^ij
+    double g_00, g_03, g_11, g_22, g_33; // components of lower g_\mu\nu
     
     // Metric derivatives
-    float d_alpha_dr, d_beta3_dr, d_gamma11_dr, d_gamma22_dr, d_gamma33_dr;
-    float d_alpha_dth, d_beta3_dth, d_gamma11_dth, d_gamma22_dth, d_gamma33_dth;
+    double d_alpha_dr, d_beta3_dr, d_gamma11_dr, d_gamma22_dr, d_gamma33_dr;
+    double d_alpha_dth, d_beta3_dth, d_gamma11_dth, d_gamma22_dth, d_gamma33_dth;
 
-    BoyerLindquistMetric(float spin, float mass) : a(spin), M(mass) {}
+    BoyerLindquistMetric(double spin, double mass) : a(spin), M(mass) {}
 
-    inline void computeMetric(float r, float theta) {
+    inline void computeMetric(double r, double theta) {
         // Define General Terms
-        const float r2 = r * r;
-        const float a2 = a * a;
-        const float sin2 = std::sinf(theta) * std::sinf(theta);
-        const float cos2 = std::cosf(theta) * std::cosf(theta);
-        const float p2 = r2 + (a2 * cos2);
-        const float delta = r2 + a2 - (2.0 * M * r);
-        const float sigma = ((r2 + a2) * (r2 + a2)) - (a2 * delta * sin2);
+        const double r2 = r * r;
+        const double a2 = a * a;
+        const double sin2 = std::sin(theta) * std::sin(theta);
+        const double cos2 = std::cos(theta) * std::cos(theta);
+        const double p2 = r2 + (a2 * cos2);
+        const double delta = r2 + a2 - (2.0 * M * r);
+        const double sigma = ((r2 + a2) * (r2 + a2)) - (a2 * delta * sin2);
 
         // Compute metric components
         computeMetricComponents(r, r2, a2, sin2, cos2, p2, delta, sigma);
@@ -37,10 +37,10 @@ public:
         computeMetricDerivatives(r, r2, a2, sin2, cos2, p2, delta, sigma, theta);
     }
 
-    inline void computeDerivatives(float* y, float* k) {
+    inline void computeDerivatives(double* y, double* k) {
         computeMetric(y[0], y[1]);
         
-        const float u_uppert = std::sqrtf((gamma11 * y[3] * y[3]) +
+        const double u_uppert = std::sqrt((gamma11 * y[3] * y[3]) +
                                         (gamma22 * y[4] * y[4]) +
                                         (gamma33 * y[5] * y[5])) /
                                alpha;
@@ -49,14 +49,14 @@ public:
         k[1] = gamma22 * y[4] / u_uppert;
         k[2] = (gamma33 * y[5] / u_uppert) - beta3;
     
-        const float temp1 = (y[3] * y[3] * d_gamma11_dr) +
+        const double temp1 = (y[3] * y[3] * d_gamma11_dr) +
                            (y[4] * y[4] * d_gamma22_dr) +
                            (y[5] * y[5] * d_gamma33_dr);
                             
         k[3] = (-alpha * u_uppert * d_alpha_dr) +
                (y[5] * d_beta3_dr) - (temp1 / (2.0 * u_uppert));
     
-        const float temp2 = (y[3] * y[3] * d_gamma11_dth) +
+        const double temp2 = (y[3] * y[3] * d_gamma11_dth) +
                            (y[4] * y[4] * d_gamma22_dth) +
                            (y[5] * y[5] * d_gamma33_dth);
                             
@@ -68,9 +68,9 @@ public:
 
 private:
     // Extract computation of metric components for better organization
-    inline void computeMetricComponents(float r, float r2, float a2, float sin2, float cos2, 
-                                float p2, float delta, float SUM) {
-        alpha = std::sqrtf((p2 * delta) / SUM);
+    inline void computeMetricComponents(double r, double r2, double a2, double sin2, double cos2, 
+                                double p2, double delta, double SUM) {
+        alpha = std::sqrt((p2 * delta) / SUM);
         beta3 = (-2.0 * M * a * r) / SUM;
         gamma11 = delta / p2;
         gamma22 = 1.0 / p2;
@@ -83,13 +83,13 @@ private:
     }
 
     // Extract computation of derivatives for better organization
-    inline void computeMetricDerivatives(float r, float r2, float a2, float sin2, float cos2, 
-                                 float p2, float delta, float sigma, float theta) {
+    inline void computeMetricDerivatives(double r, double r2, double a2, double sin2, double cos2, 
+                                 double p2, double delta, double sigma, double theta) {
         // Derivatives w.r.t r
-        const float dp2_dr = 2.0 * r;
-        const float dp2inv_dr = -2.0 * r / p2 / p2;
-        const float ddelta_dr = dp2_dr - (2.0 * M);
-        const float dSUMinv_dr = ((4.0 * r * (r2 + a2)) - (ddelta_dr * a2 * sin2)) / -sigma / sigma;
+        const double dp2_dr = 2.0 * r;
+        const double dp2inv_dr = -2.0 * r / p2 / p2;
+        const double ddelta_dr = dp2_dr - (2.0 * M);
+        const double dSUMinv_dr = ((4.0 * r * (r2 + a2)) - (ddelta_dr * a2 * sin2)) / -sigma / sigma;
         
         d_gamma11_dr = (delta * dp2inv_dr) + (ddelta_dr / p2);
         d_gamma22_dr = dp2inv_dr;
@@ -98,15 +98,15 @@ private:
         d_beta3_dr = -2.0 * M * a * (1.0 / sigma + r * dSUMinv_dr);
 
         // Derivatives w.r.t theta
-        const float dp2_dth = -2.0 * a2 * std::sinf(theta) * std::cosf(theta);
-        const float dp2inv_dth = -dp2_dth / p2 / p2;
-        // const float ddelta_dth = 0;
-        const float dSUMinv_dth = 2.0 * a2 * delta * std::sinf(theta) * std::cosf(theta) / sigma / sigma;
+        const double dp2_dth = -2.0 * a2 * std::sin(theta) * std::cos(theta);
+        const double dp2inv_dth = -dp2_dth / p2 / p2;
+        const double ddelta_dth = 0;
+        const double dSUMinv_dth = 2.0 * a2 * delta * std::sin(theta) * std::cos(theta) / sigma / sigma;
         
         d_gamma11_dth = delta * dp2inv_dth;
         d_gamma22_dth = dp2inv_dth;
         d_gamma33_dth = (dp2_dth / sigma / sin2) + (dSUMinv_dth * p2 / sin2) - 
-                       (2.0 * std::cosf(theta) / std::sinf(theta) / sin2 * p2 / sigma);
+                       (2.0 * std::cos(theta) / std::sin(theta) / sin2 * p2 / sigma);
         d_alpha_dth = 0.5 / alpha * delta * (dp2_dth / sigma + dSUMinv_dth * p2);
         d_beta3_dth = -2.0 * M * a * r * dSUMinv_dth;
     }
