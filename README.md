@@ -11,11 +11,11 @@ TODO:
 - [x] OpenMP parallelization on CPU
 - [X] OpenGL rendering
 - [X] CUDA accelerated computations
-- [X] CUDA parallelization on GPU
+- [X] CUDA optimizations
 - [ ] CUDA + OpenGL interop
-- [ ] clean up cpu implementation (run opengl on mac/windows/linux)
+- [ ] clean up cpu implementation (run opengl on mac/windows?/linux)
 - [ ] add compile script for linux+cuda
 
 Extra TODO:
 - [ ] Metal acceleration for macOS?
-- [ ] make a video or write up a post?
+- [ ] make a video or write up?
