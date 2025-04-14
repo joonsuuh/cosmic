@@ -5,26 +5,9 @@
 #include <string>
 #include <cmath>
 
-// Add CUDA compatibility macros
-#ifdef __CUDA_ARCH__
-#define CUDA_CALLABLE __host__ __device__
-#else
-#define CUDA_CALLABLE
-#endif
-
 namespace Config {
 
 // ===== BLACK HOLE CONFIGURATION =====
-
-/**
- * @struct BlackHole
- * @brief Black hole parameters
- * 
- * Initializes Default spin, mass, approximate accretion disk at @f$ \theta = \pi / 2 @f$,
- * 
- * and observer position in spherical coordinates.
- * @see Constants::BlackHole for default values
- */
 struct BlackHole {
     // Black hole parameters
     float spin{Constants::BlackHole::DEFAULT_SPIN};
@@ -39,15 +22,6 @@ struct BlackHole {
     float diskTolerance;
     float farRadius{Constants::BlackHole::DEFAULT_FAR_RADIUS};
     
-    // ===== Constructors =====
-
-    /**
-     * @brief Default constructor
-     * 
-     * Initializes the black hole with default values and calculates the disk tolerance.
-     * The disk tolerance is set to 1.01 times the radius of the event horizon.
-     * The event horizon radius is calculated using the formula:
-     */
     BlackHole() : 
         diskTolerance{static_cast<float>(1.01f * (mass + std::sqrtf(mass * mass - spin * spin)))} 
     {}
@@ -65,59 +39,46 @@ struct BlackHole {
 };
 
 // ===== IMAGE CONFIGURATION =====
-/**
- * @struct Image
- * @brief Image parameters for ray tracing
- * 
- * Initializes default image dimensions and scaling factors.
- * 
- * @see Constants::Image for default values
- */
 struct Image {
     // Image dimensions and scaling
-    int aspectWidth{Constants::Image::DEFAULT_ASPECT_WIDTH};
-    int aspectHeight{Constants::Image::DEFAULT_ASPECT_HEIGHT};
-    int scale{Constants::Image::DEFAULT_IMAGE_SCALE};
+    float aspectWidth{Constants::Image::DEFAULT_ASPECT_WIDTH};
+    float aspectHeight{Constants::Image::DEFAULT_ASPECT_HEIGHT};
+    float scale{Constants::Image::DEFAULT_IMAGE_SCALE};
     float cameraScale{Constants::Image::DEFAULT_CAMERA_SCALE};
     
-    // Calculated properties - mark as CUDA callable
-    CUDA_CALLABLE int width() const { return aspectWidth * scale; }
-    CUDA_CALLABLE int height() const { return aspectHeight * scale; }
-    CUDA_CALLABLE int numPixels() const { return width() * height(); }
-    CUDA_CALLABLE float aspectRatio() const { return static_cast<float>(aspectWidth) / aspectHeight; }
+    // Camera parameters as direct members with inline calculation
+    float offsetX = -cameraScale * aspectWidth * (1.0f - 1.0f/static_cast<float>(static_cast<int>(aspectWidth * scale)));
+    float offsetY = cameraScale * aspectHeight;
+    float stepX = 2.0f * cameraScale * aspectWidth / static_cast<float>(static_cast<int>(aspectWidth * scale));
+    float stepY = 2.0f * cameraScale * aspectHeight / static_cast<float>(static_cast<int>(aspectHeight * scale));
     
-    // Camera parameters for ray tracing
-    struct CameraParams {
-        float offsetX;
-        float offsetY;
-        float stepX;
-        float stepY;
-    };
+    int width() const { return static_cast<int>(aspectWidth * scale); }
+    int height() const { return static_cast<int>(aspectHeight * scale); }
+    int numPixels() const { return static_cast<int>(width() * height()); }
+    float aspectRatio() const { return static_cast<float>(aspectWidth) / aspectHeight; }
     
-    // Calculate camera parameters for ray tracing
-    CameraParams getCameraParams() const {
-        CameraParams params;
-        
-        float aspectWidthD = static_cast<float>(aspectWidth);
-        float aspectHeightD = static_cast<float>(aspectHeight);
-        
-        params.offsetX = -aspectWidthD * cameraScale + (aspectWidthD * cameraScale / width());
-        params.offsetY = aspectHeightD * cameraScale;
-        params.stepX = 2.0f * aspectWidthD * cameraScale / width();
-        params.stepY = 2.0f * aspectHeightD * cameraScale / height();
-        
-        return params;
-    }
-    
-    // Convenience method to set aspect ratio
     void setAspectRatio(int width, int height) {
         aspectWidth = width;
         aspectHeight = height;
+        
+        // Recalculate camera parameters inline
+        offsetX = -cameraScale * aspectWidth * (1.0f - 1.0f/this->width());
+        offsetY = cameraScale * aspectHeight;
+        stepX = 2.0f * cameraScale * aspectWidth / this->width();
+        stepY = 2.0f * cameraScale * aspectHeight / this->height();
+    }
+    
+    void setScale(float newScale) {
+        scale = newScale;
+        
+        offsetX = -cameraScale * aspectWidth * (1.0f - 1.0f/width());
+        offsetY = cameraScale * aspectHeight;
+        stepX = 2.0f * cameraScale * aspectWidth / width();
+        stepY = 2.0f * cameraScale * aspectHeight / height();
     }
 };
 
 // ===== OUTPUT CONFIGURATION =====
-// Simplified output configuration - direct initialization
 struct OutputConfig {
     std::string outputDir{Constants::Output::DEFAULT_OUTPUT_DIR};
     std::string baseFilename{Constants::Output::DEFAULT_FILENAME};

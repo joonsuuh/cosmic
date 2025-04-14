@@ -1,14 +1,17 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.30)
 
 ########################################
-# Compiler and Standards
+# Project Options
 ########################################
 
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# For macOS: use -DWITH_CUDA=OFF
 option(USE_CLANG "Build with Clang compiler" OFF)
+option(WITH_CUDA "Build with CUDA support" ON)
 
-# Compiler selection must be before project()
+########################################
+# Compiler Selection
+########################################
+
 if(USE_CLANG)
     set(CMAKE_C_COMPILER clang)
     set(CMAKE_CXX_COMPILER clang++)
@@ -22,18 +25,28 @@ else()
     endif()
 endif()
 
-# Debug output
-message(STATUS "C compiler: ${CMAKE_C_COMPILER}")
-message(STATUS "C++ compiler: ${CMAKE_CXX_COMPILER}")
+########################################
+# Project Definition
+########################################
 
-# Enable CUDA support
-option(WITH_CUDA "Build with CUDA support" ON)
-
-project(cosmic LANGUAGES CXX C CUDA)
 if(WITH_CUDA)
-    # Add CUDA language support if enabled
-    # enable_language(CUDA)
+    project(cosmic LANGUAGES CXX C CUDA)
     message(STATUS "CUDA support enabled")
+else()
+    project(cosmic LANGUAGES CXX C)
+endif()
+
+########################################
+# Language Standards
+########################################
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+if(WITH_CUDA)
+    set(CMAKE_CUDA_STANDARD ${CMAKE_CXX_STANDARD})
+    set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 endif()
 
 ########################################
@@ -43,7 +56,6 @@ endif()
 set(HOMEBREW_PATH /opt/homebrew)
 
 if(APPLE)
-    # Apple clang shenanigans
     if(USE_CLANG)
         set(CMAKE_CXX_FLAGS "-O3")
         set(OMP_PATH ${HOMEBREW_PATH}/opt/libomp/include)
@@ -69,15 +81,11 @@ message(STATUS "CXX FLAGS: ${CMAKE_CXX_FLAGS}")
 ########################################
 
 if(WITH_CUDA)
-    # Set CUDA architecture flags - modify as needed for your GPU
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --resource-usage -O3")
-    
-    # Set architecture based on compute capability
     set(CMAKE_CUDA_ARCHITECTURES "89")
-    
-    # Set up CUDA standard compatibility with C++ standard
-    set(CMAKE_CUDA_STANDARD ${CMAKE_CXX_STANDARD})
-    set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+    set(CMAKE_CUDA_USE_RESPONSE_FILE_FOR_INCLUDES FALSE)
+    set(CMAKE_CUDA_USE_RESPONSE_FILE_FOR_LIBRARIES FALSE)
+    set(CMAKE_CUDA_USE_RESPONSE_FILE_FOR_OBJECTS FALSE)
     
     message(STATUS "CUDA architectures: ${CMAKE_CUDA_ARCHITECTURES}")
     message(STATUS "CUDA flags: ${CMAKE_CUDA_FLAGS}")
@@ -92,52 +100,38 @@ find_package(OpenGL REQUIRED)
 find_package(glfw3 REQUIRED)
 
 # GLAD library
-add_library(glad STATIC external/src/glad.c)
-target_include_directories(glad PUBLIC external)
+add_library(glad STATIC external/glad/glad.c)
+target_include_directories(glad PUBLIC ${CMAKE_SOURCE_DIR}/external)
 
 ########################################
 # Project Structure
 ########################################
 
-# Create required directories
-if(NOT EXISTS ${CMAKE_SOURCE_DIR}/bin)
-    file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
-endif()
-if(NOT EXISTS ${CMAKE_SOURCE_DIR}/data)
-    file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/data)
-endif()
-
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
+# Set output, ppm data, and shader dir
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(DATA_DIR ${CMAKE_BINARY_DIR}/data)
+file(MAKE_DIRECTORY ${DATA_DIR})
+set(SHADER_DIR "${CMAKE_SOURCE_DIR}/shaders/")
 
 ########################################
-# Targets
+# CPU Targets
 ########################################
 
-# Main executable
-# add_executable(cosmic src/bh_gl_omp.cpp)
-# target_include_directories(cosmic PUBLIC 
-#     include/cosmic
-#     external
-# )
-# target_link_libraries(cosmic PRIVATE
-#     glad
-#     glfw
-#     OpenGL::GL
-#     OpenMP::OpenMP_CXX
-# )
-
-# CPU-only executable
+# CPU-only
 add_executable(cosmic_cpu src/cosmic_cpu.cpp)
-target_include_directories(cosmic_cpu PUBLIC include/cosmic)
+target_include_directories(cosmic_cpu PRIVATE ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(cosmic_cpu PRIVATE
     OpenMP::OpenMP_CXX
 )
+target_compile_definitions(cosmic_cpu PRIVATE 
+    PPM_DIR="${DATA_DIR}"
+)
 
-# CPU-only executable with OpenGL
+# CPU-only with OpenGL
 add_executable(cosmic_cpu_gl src/cosmic_cpu_gl.cpp)
-target_include_directories(cosmic_cpu_gl PUBLIC
-    include/cosmic
-    external
+target_include_directories(cosmic_cpu_gl PRIVATE
+    ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}/external
 )
 target_link_libraries(cosmic_cpu_gl PRIVATE
     glad
@@ -145,49 +139,20 @@ target_link_libraries(cosmic_cpu_gl PRIVATE
     OpenGL::GL
     OpenMP::OpenMP_CXX
 )
+target_compile_definitions(cosmic_cpu_gl PRIVATE 
+    SHADER_DIR="${SHADER_DIR}"
+    PPM_DIR="${DATA_DIR}"
+)
 
-# CUDA-accelerated executable
+########################################
+# CUDA Targets
+########################################
+
 if(WITH_CUDA)
     add_executable(cosmic_cuda src/cosmic_cuda.cu)
-    target_include_directories(cosmic_cuda PUBLIC include/cosmic)
-    target_link_libraries(cosmic_cuda PRIVATE)
-    
-    # Set output directory for CUDA executable
-    set_target_properties(cosmic_cuda PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin
+    target_include_directories(cosmic_cuda PRIVATE ${CMAKE_SOURCE_DIR}/include)
+    # target_link_libraries(cosmic_cuda PRIVATE)
+    target_compile_definitions(cosmic_cuda PRIVATE 
+        PPM_DIR="${DATA_DIR}"
     )
-    
-    # Add CUDA-specific definitions
-    target_compile_definitions(cosmic_cuda PRIVATE PPM_DIR="${CMAKE_SOURCE_DIR}/data/")
 endif()
-
-########################################
-# Definitions
-########################################
-
-# target_compile_definitions(cosmic PRIVATE SHADER_DIR="${CMAKE_SOURCE_DIR}/shaders/")
-target_compile_definitions(cosmic_cpu PRIVATE SHADER_DIR="${CMAKE_SOURCE_DIR}/shaders/")
-target_compile_definitions(cosmic_cpu_gl PRIVATE SHADER_DIR="${CMAKE_SOURCE_DIR}/shaders/")
-
-# target_compile_definitions(cosmic PRIVATE PPM_DIR="${CMAKE_SOURCE_DIR}/data/")
-target_compile_definitions(cosmic_cpu PRIVATE PPM_DIR="${CMAKE_SOURCE_DIR}/data/")
-target_compile_definitions(cosmic_cpu_gl PRIVATE PPM_DIR="${CMAKE_SOURCE_DIR}/data/")
-
-########################################
-###### STUFF I USED ######
-########################################
-
-# glfw3 lib 
-# wsl2 ubuntu: `sudo apt install libglfw3-dev`
-# macOS hombrew: `brew install glfw`
-
-# if(APPLE)
-#     set(HOMEBREW_PATH /opt/homebrew)
-#     set(GLFW_DIR ${HOMEBREW_PATH}/lib/cmake/glfw3)
-    
-#     include_directories(SYSTEM 
-#         ${HOMEBREW_PATH}/include
-#     )
-#     link_directories(${HOMEBREW_PATH}/lib)
-# endif()
-# add_definitions(-DBUILD_DIR)

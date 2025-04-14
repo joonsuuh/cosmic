@@ -1,10 +1,8 @@
 #ifndef COSMIC_DORMAND_PRINCE_H
 #define COSMIC_DORMAND_PRINCE_H
 
-#include <cmath>      // for sqrt, abs, pow
-#include <cstring>    // for memcpy
+#include <cmath>
 
-// Modern C++ approach using template interfaces
 class DormandPrinceRK45 {
 public:
     DormandPrinceRK45(int num_equations, float tolerance_abs, float tolerance_rel,
@@ -62,7 +60,6 @@ public:
         return a < b ? a : b;
     }
 
-    // 
     // integrates ODEs and checks for hit on the disk
     // returns if hit detected
     template<typename DerivativeFunctor, typename HitFunctor, typename BoundaryFunctor>
@@ -86,7 +83,6 @@ public:
             err = max_val(error(), hmin);
             
             if (err < 1.0) {
-                // Direct loop is more efficient than std::memcpy for small arrays
                 for (int i = 0; i < N; ++i) {
                     y[i] = y_next[i];
                 }
@@ -113,7 +109,7 @@ public:
             }
             h = clamp_val(h, hmin, hmax);
         }
-	std::cout << "Iterations: " << iterations << std::endl;
+	// std::cout << "Iterations: " << iterations << std::endl;
         return false; // Return false if no hit detected
     }
 

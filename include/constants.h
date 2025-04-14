@@ -1,8 +1,6 @@
 #ifndef COSMIC_CONSTANTS_H
 #define COSMIC_CONSTANTS_H
 
-#include <cmath>
-
 // CMAKE DEFINES PPM_DIR 
 #ifndef PPM_DIR
   #define PPM_DIR "data/" // for compiling through command line ./compile.sh
@@ -12,7 +10,6 @@ namespace Constants {
     // Math constants
     constexpr float PI = M_PI;
     constexpr float HALF_PI = M_PI / 2.0;
-    constexpr float TWO_PI = 2.0 * M_PI;
     constexpr float DEG_TO_RAD = M_PI / 180.0;
     constexpr float RAD_TO_DEG = 180.0 / M_PI;
     
@@ -30,20 +27,20 @@ namespace Constants {
     
     // Image parameters
     namespace Image {
-        constexpr int DEFAULT_ASPECT_WIDTH = 16;
-        constexpr int DEFAULT_ASPECT_HEIGHT = 9;
-        constexpr int DEFAULT_IMAGE_SCALE = 10;
-        constexpr float DEFAULT_CAMERA_SCALE = 1.5f;
+        constexpr float DEFAULT_ASPECT_WIDTH = 16.0f;
+        constexpr float DEFAULT_ASPECT_HEIGHT = 9.0f;
+        constexpr float DEFAULT_IMAGE_SCALE = 10.0f;
+        constexpr float DEFAULT_CAMERA_SCALE = 2.0f;
     }
     
     // Integration parameters
     namespace Integration {
         constexpr float ABS_TOLERANCE = 1.0e-8f;
         constexpr float REL_TOLERANCE = 1.0e-4f;
-        constexpr float DISK_TOLERANCE = 0.01f;
-        constexpr float INITIAL_STEP_SIZE = 0.1f;
         constexpr float MIN_STEP_SIZE = 1.0e-8f;
         constexpr float MAX_STEP_SIZE = 0.1f;
+        constexpr float INITIAL_STEP_SIZE = 0.1f;
+        constexpr float DISK_TOLERANCE = 0.01f;
         constexpr int MAX_ITERATIONS = 10000;
     }
     
@@ -56,7 +53,7 @@ namespace Constants {
     // Output default parameters
     namespace Output {
         constexpr const char* DEFAULT_OUTPUT_DIR = PPM_DIR;
-        constexpr const char* DEFAULT_FILENAME = "bh_cpu";
+        constexpr const char* DEFAULT_FILENAME = "cosmic";
         constexpr const char* DEFAULT_FORMAT = "ppm";
     }
 }

@@ -48,11 +48,10 @@ struct RayBoundaryCheckFunctor {
 // ===== MAIN RAY TRACER CLASS =====
 class RayTracer {
 public:
-    // Primary constructor using simplified Config objects
+    // Updated constructor that doesn't initialize a separate cameraParams_ member
     RayTracer(const Config::BlackHole& bhConfig, const Config::Image& imgConfig)
         : bhConfig_(bhConfig)
         , imgConfig_(imgConfig)
-        , cameraParams_(imgConfig.getCameraParams())
     {}
 
     // Traces ray from the observer at pixel (i, j)
@@ -85,18 +84,14 @@ public:
     }
 
 private:
-    /**
-     * @brief Setup initial conditions for the ray for each CPU thread
-     * 
-     * @param[in] i Pixel x-coordinate starting at the left
-     * @param[in] j Pixel y-coordinate starting at the top
-     * @param[out] ray Initializes photon position and momentum in spherical coordinates
-     * @param metric Reference to the BoyerLindquistMetric object
-     * 
-     */
+    //  Setup initial conditions for the ray for each CPU thread 
+    //  i: Pixel x-coordinate starting at the left
+    //  j: Pixel y-coordinate starting at the top
+    //  ray: Initializes photon position and momentum in spherical coordinates
     void setupRayInitialConditions(int i, int j, float* ray, BoyerLindquistMetric& metric) {
-        const float local_x_sc = cameraParams_.offsetX + (i * cameraParams_.stepX);
-        const float local_y_sc = cameraParams_.offsetY - (j * cameraParams_.stepY);
+        // Use camera parameters directly from imgConfig_
+        const float local_x_sc = imgConfig_.offsetX + (i * imgConfig_.stepX);
+        const float local_y_sc = imgConfig_.offsetY - (j * imgConfig_.stepY);
 
         // Pre-calculate frequently used values
         const float D_squared = bhConfig_.distance * bhConfig_.distance;
@@ -123,6 +118,7 @@ private:
 
     // Calculate intensity of a ray that hit the disk
     void calculateIntensity(const float* ray, const BoyerLindquistMetric& metric, float& intensity) {
+        // Rest of the method remains unchanged
         const float rf = ray[0];
         const float u_rf = -ray[3];
         const float u_thf = -ray[4];
@@ -155,7 +151,6 @@ private:
     // Store the configuration objects
     Config::BlackHole bhConfig_;
     Config::Image imgConfig_;
-    Config::Image::CameraParams cameraParams_;
 };
 
 #endif // COSMIC_RAY_TRACER_H

@@ -173,4 +173,4 @@ float* generatePerlinNoise(int width, int height, int octaves = 1, float persist
 //   return generatePerlinNoise(N, N, octaves, persistence);
 // }
 
-#endif
+#endif // PERLIN_H
