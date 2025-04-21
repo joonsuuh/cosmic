@@ -1,6 +1,6 @@
 #include <iostream>
 #include <fstream>
-#include "../include/cosmic/perlin.h"
+#include "../include/perlin.h"
 
 int main() {
   // testing if perlin noise works with test image

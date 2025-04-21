@@ -15,22 +15,22 @@ namespace Constants {
     
     // Black hole parameters
     namespace BlackHole {
-        constexpr float DEFAULT_SPIN = 0.99f;
-        constexpr float DEFAULT_MASS = 1.0f;
-        constexpr float DEFAULT_DISTANCE = 500.0f;
-        constexpr float DEFAULT_OBSERVER_THETA = 85.0f * DEG_TO_RAD;
-        constexpr float DEFAULT_OBSERVER_PHI = 0.0f;
-        constexpr float DEFAULT_INNER_RADIUS = 5.0f;
-        constexpr float DEFAULT_OUTER_RADIUS = 20.0f;
-        constexpr float DEFAULT_FAR_RADIUS = 600.0f;
+        constexpr float BH_SPIN = 0.99f;
+        constexpr float BH_MASS = 1.0f;
+        constexpr float OBSERVER_DISTANCE = 500.0f;
+        constexpr float OBSERVER_THETA = 85.0f * DEG_TO_RAD;
+        constexpr float OBSERVER_PHI = 0.0f;
+        constexpr float DISK_INNER_RADIUS = 5.0f;
+        constexpr float DISK_OUTER_RADIUS = 20.0f;
+        constexpr float FAR_RADIUS = 600.0f;
     }
     
     // Image parameters
     namespace Image {
-        constexpr float DEFAULT_ASPECT_WIDTH = 16.0f;
-        constexpr float DEFAULT_ASPECT_HEIGHT = 9.0f;
-        constexpr float DEFAULT_IMAGE_SCALE = 10.0f;
-        constexpr float DEFAULT_CAMERA_SCALE = 2.0f;
+        constexpr float ASPECT_WIDTH = 16.0f;
+        constexpr float ASPECT_HEIGHT = 9.0f;
+        constexpr float IMAGE_SCALE = 10.0f;
+        // constexpr float DEFAULT_CAMERA_SCALE = 2.0f;
     }
     
     // Integration parameters

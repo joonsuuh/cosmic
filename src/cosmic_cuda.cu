@@ -8,28 +8,15 @@
 
 // Project CUDA headers
 #include "ray_tracer_cuda.cuh"
+#include "cuda_helper.cuh"
 
 // Project headers
 #include "config.h"
+#include "image_processing.h"
 #include "perlin.h"
 #include "timer.h"
 
-// CUDA Error Handling
-#define CUDA_CHECK(call)                                                   \
-  do {                                                                     \
-    cudaError_t error = call;                                              \
-    if (error != cudaSuccess) {                                            \
-      std::cerr << "CUDA error at " << __FILE__ << ":" << __LINE__ << ": " \
-                << cudaGetErrorString(error) << std::endl;                 \
-      exit(1);                                                             \
-    }                                                                      \
-  } while (0)
 
-// Forward declarations
-void normalizeScreenBuffer(float* screenBuffer, int numPixels);
-void writeImageToFile(const std::string& filename, float* screenBuffer,
-                      int pixelWidth, int pixelHeight);
-void applyHotColorMap(float value, int& r, int& g, int& b);
 void printDeviceInfo();
 
 int main(int argc, char* argv[]) {
@@ -40,22 +27,17 @@ int main(int argc, char* argv[]) {
   printDeviceInfo();
 
   // ===== CONFIG SETUP =====
-  Config::BlackHole bhConfig;
-  bhConfig.spin = 0.85f;
-  // bhConfig.theta = M_PI;
-  // bhConfig.setObserverAngle(175.0f);
+  BlackHole bhConfig;
 
-  Config::Image imgConfig;
-  imgConfig.scale = 120;
+  Image imgConfig;
 
   // Create camera parameters
   const int pixelWidth = imgConfig.width();
   const int pixelHeight = imgConfig.height();
   const int numPixels = imgConfig.numPixels();
-  // Config::Image::CameraParams camParams = imgConfig.getCameraParams();
 
   // Set up output configuration
-  Config::OutputConfig outConfig;
+  OutputConfig outConfig;
   outConfig.setDescriptiveFilename(bhConfig, imgConfig, "TEMP");
 
   // ===== MEMORY ALLOCATION =====
@@ -91,13 +73,13 @@ int main(int argc, char* argv[]) {
   // ===== COPY CONFIG TO CONSTANT MEMORY =====
   timer.start("SETUP CONSTANT MEMORY");
   float bhParams[9] = {
-      bhConfig.spin,        bhConfig.mass,          bhConfig.distance,
-      bhConfig.theta,       bhConfig.phi,           bhConfig.innerRadius,
-      bhConfig.outerRadius, bhConfig.diskTolerance, bhConfig.farRadius};
-  float imgParams[4] = {imgConfig.aspectWidth, imgConfig.aspectHeight,
-                        imgConfig.scale, imgConfig.cameraScale};
-  float cameraParams[4] = {imgConfig.offsetX, imgConfig.offsetY,
-                           imgConfig.stepX, imgConfig.stepY};
+      bhConfig.spin(),        bhConfig.mass(),          bhConfig.distance(),
+      bhConfig.theta(),       bhConfig.phi(),           bhConfig.innerRadius(),
+      bhConfig.outerRadius(), bhConfig.diskTolerance(), bhConfig.farRadius()};
+  float imgParams[3] = {imgConfig.aspectWidth(), imgConfig.aspectHeight(),
+                        imgConfig.scale()};
+  float cameraParams[4] = {imgConfig.offsetX(), imgConfig.offsetY(),
+                           imgConfig.stepX(), imgConfig.stepY()};
   float integrationParams[6] = {Constants::Integration::ABS_TOLERANCE,
                                 Constants::Integration::REL_TOLERANCE,
                                 Constants::Integration::MIN_STEP_SIZE,
@@ -152,95 +134,4 @@ int main(int argc, char* argv[]) {
   CUDA_CHECK(cudaFree(d_noiseMap));
 
   return 0;
-}
-
-// Print CUDA device information
-void printDeviceInfo() {
-  int deviceCount = 0;
-  CUDA_CHECK(cudaGetDeviceCount(&deviceCount));
-  assert(deviceCount > 0 && "No CUDA devices found!");
-
-  cudaDeviceProp deviceProp;
-  CUDA_CHECK(cudaGetDeviceProperties(&deviceProp, 0));
-
-  std::cout << "Device " << "0" << ": " << deviceProp.name << "\n"
-            << "  Compute Capability: " << deviceProp.major << "."
-            << deviceProp.minor << "\n"
-            << "  Total Global Memory: "
-            << deviceProp.totalGlobalMem / (1024 * 1024) << " MB" << "\n"
-            << "  Multiprocessors: " << deviceProp.multiProcessorCount << "\n"
-            << "  Max Threads per Block: " << deviceProp.maxThreadsPerBlock
-            << "\n"
-            << "  Max Threads Dimensions: (" << deviceProp.maxThreadsDim[0]
-            << ", " << deviceProp.maxThreadsDim[1] << ", "
-            << deviceProp.maxThreadsDim[2] << ")" << "\n"
-            << "  Max Grid Size: (" << deviceProp.maxGridSize[0] << ", "
-            << deviceProp.maxGridSize[1] << ", " << deviceProp.maxGridSize[2]
-            << ")" << std::endl;
-}
-
-// Normalize the screen buffer values
-void normalizeScreenBuffer(float* screenBuffer, int numPixels) {
-  float max_intensity = 0.0f;
-
-  // First pass: find max intensity
-  for (int i = 0; i < numPixels; i++) {
-    max_intensity = std::max(max_intensity, screenBuffer[i]);
-  }
-
-  // Normalize the screen buffer
-  if (max_intensity > 0.0f) {
-    for (int i = 0; i < numPixels; i++) {
-      screenBuffer[i] /= max_intensity;
-    }
-  }
-}
-
-// Apply hot colormap (same as in CPU version)
-void applyHotColorMap(float value, int& r, int& g, int& b) {
-  // Define colormap thresholds
-  const float RED_THRESHOLD = 0.365079f;     // Threshold for black to red
-  const float YELLOW_THRESHOLD = 0.746032f;  // Threshold for red to yellow
-
-  // Implement hot colormap
-  if (value < RED_THRESHOLD) {
-    // Black to red
-    r = static_cast<int>((value / RED_THRESHOLD) * 255);
-    g = 0;
-    b = 0;
-  } else if (value < YELLOW_THRESHOLD) {
-    // Red to yellow
-    r = 255;
-    g = static_cast<int>(
-        ((value - RED_THRESHOLD) / (YELLOW_THRESHOLD - RED_THRESHOLD)) * 255);
-    b = 0;
-  } else {
-    // Yellow to white
-    r = 255;
-    g = 255;
-    b = static_cast<int>(
-        ((value - YELLOW_THRESHOLD) / (1.0f - YELLOW_THRESHOLD)) * 255);
-  }
-}
-
-// Write image to PPM file (same as in CPU version)
-void writeImageToFile(const std::string& filename, float* screenBuffer,
-                      int pixelWidth, int pixelHeight) {
-  std::ofstream outputFile(filename);
-  outputFile << "P3\n";
-  outputFile << pixelWidth << " " << pixelHeight << "\n";
-  outputFile << "255\n";
-
-  for (int i = 0; i < pixelHeight; i++) {
-    for (int j = 0; j < pixelWidth; j++) {
-      float value = screenBuffer[i * pixelWidth + j];
-      int r, g, b;
-
-      applyHotColorMap(value, r, g, b);
-
-      outputFile << r << " " << g << " " << b << " ";
-    }
-    outputFile << "\n";
-  }
-  outputFile.close();
 }

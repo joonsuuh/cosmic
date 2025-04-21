@@ -49,9 +49,9 @@ struct RayBoundaryCheckFunctor {
 class RayTracer {
 public:
     // Updated constructor that doesn't initialize a separate cameraParams_ member
-    RayTracer(const Config::BlackHole& bhConfig, const Config::Image& imgConfig)
-        : bhConfig_(bhConfig)
-        , imgConfig_(imgConfig)
+    RayTracer(const BlackHole& bhConfig, const Image& imgConfig)
+        : m_bh_config(bhConfig)
+        , m_img_config(imgConfig)
     {}
 
     // Traces ray from the observer at pixel (i, j)
@@ -64,10 +64,10 @@ public:
         
         MetricDerivativeFunctor metricDerivFunctor(metric);
         AccretionDiskHitFunctor diskHitFunctor(
-            bhConfig_.innerRadius, bhConfig_.outerRadius, 
+            m_bh_config.innerRadius(), m_bh_config.outerRadius(), 
             Constants::Integration::DISK_TOLERANCE);
         RayBoundaryCheckFunctor boundaryCheckFunctor(
-            bhConfig_.diskTolerance, bhConfig_.farRadius);
+            m_bh_config.diskTolerance(), m_bh_config.farRadius());
             
         // Direct boolean return value
         const bool hit = integrator.integrate(
@@ -89,14 +89,14 @@ private:
     //  j: Pixel y-coordinate starting at the top
     //  ray: Initializes photon position and momentum in spherical coordinates
     void setupRayInitialConditions(int i, int j, float* ray, BoyerLindquistMetric& metric) {
-        // Use camera parameters directly from imgConfig_
-        const float local_x_sc = imgConfig_.offsetX + (i * imgConfig_.stepX);
-        const float local_y_sc = imgConfig_.offsetY - (j * imgConfig_.stepY);
+        // Use camera parameters directly from m_img_config
+        const float local_x_sc = m_img_config.offsetX() + (i * m_img_config.stepX());
+        const float local_y_sc = m_img_config.offsetY() - (j * m_img_config.stepY());
 
         // Pre-calculate frequently used values
-        const float D_squared = bhConfig_.distance * bhConfig_.distance;
-        const float beta = local_x_sc / bhConfig_.distance;
-        const float alpha = local_y_sc / bhConfig_.distance;
+        const float D_squared = m_bh_config.distance() * m_bh_config.distance();
+        const float beta = local_x_sc / m_bh_config.distance();
+        const float alpha = local_y_sc / m_bh_config.distance();
         const float cos_beta = std::cosf(beta);
         const float sin_beta = std::sinf(beta);
         const float cos_alpha = std::cosf(alpha);
@@ -104,7 +104,7 @@ private:
         
         // Set initial position
         ray[0] = std::sqrtf(D_squared + (local_x_sc * local_x_sc) + (local_y_sc * local_y_sc));
-        ray[1] = bhConfig_.theta - alpha;
+        ray[1] = m_bh_config.theta()- alpha;
         ray[2] = beta;
         
         // Compute metric at initial position
@@ -136,8 +136,8 @@ private:
             (u_phif * metric.beta3);
         
         // Calculate angular velocity of matter in accretion disk
-        const float omega = 1.0 / (bhConfig_.spin + 
-                                (std::powf(rf, 3.0 / 2.0) / std::sqrtf(bhConfig_.mass)));
+        const float omega = 1.0 / (m_bh_config.spin() + 
+                                (std::powf(rf, 3.0 / 2.0) / std::sqrtf(m_bh_config.mass())));
     
         // Calculate redshift factor                
         const float oneplusz = (1.0 + (omega * u_phif / u_lower_tf))
@@ -149,8 +149,8 @@ private:
     }
 
     // Store the configuration objects
-    Config::BlackHole bhConfig_;
-    Config::Image imgConfig_;
+    BlackHole m_bh_config;
+    Image m_img_config;
 };
 
 #endif // COSMIC_RAY_TRACER_H

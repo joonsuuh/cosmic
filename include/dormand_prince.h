@@ -41,7 +41,6 @@ public:
       delete[] y_next;
     }
 
-    // Disable copy construction/assignment (Rule of 5)
     DormandPrinceRK45(const DormandPrinceRK45&) = delete;
     DormandPrinceRK45& operator=(const DormandPrinceRK45&) = delete;
     DormandPrinceRK45(DormandPrinceRK45&&) = delete;
