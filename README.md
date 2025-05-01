@@ -1,7 +1,6 @@
 # COSMIC OpenGL Spacetime Metric In CUDA (COSMIC)
 
-<!-- INSERT IMAGE/VIDEO HER -->
-![bh_1920x1080](./assets/videos/bh_1080.mp4 "Black Hole with Perlin Noise Hot Colormap")
+https://github.com/user-attachments/assets/5725aaae-0313-4f94-aa12-a831dbde78e4
 
 ## Features
 
