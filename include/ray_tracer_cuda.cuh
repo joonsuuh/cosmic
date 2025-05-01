@@ -230,4 +230,57 @@ __global__ void rayTraceKernel(float* screenBuffer, const float* noiseMap,
   }
   screenBuffer[idx] = intensity;
 }
+
+// Atomic CAS for float
+// https://stackoverflow.com/questions/17399119/how-do-i-use-atomicmax-on-floating-point-values-in-cuda
+__device__ float atomicMaxf(float* address, float val) {
+  int* address_as_i = (int*)address;
+  int old = *address_as_i, assumed;
+  do {
+      assumed = old;
+      old = atomicCAS(address_as_i, assumed,
+                      __float_as_int(fmaxf(val, __int_as_float(assumed))));
+  } while (assumed != old);
+  return __int_as_float(old);
+}
+
+// Modified maxReduceAtomic kernel with boundary checks and error handling
+__global__ void maxReduceAtomic(const float* input, float* output, int size,
+                                float identity) {
+  extern __shared__ float s_input[];
+  unsigned int tid = threadIdx.x;
+  unsigned int segment = blockIdx.x * blockDim.x * 2;
+  unsigned int i = segment + tid;
+
+  if (i + blockDim.x < size) {
+    s_input[tid] = fmaxf(input[i], input[i + blockDim.x]);
+  } else if (i < size) {
+    s_input[tid] = input[i];
+  } else {
+    s_input[tid] = identity;
+  }
+
+  // Reduction in shared memory
+  for (unsigned int s = blockDim.x / 2; s > 0; s >>= 1) {
+    __syncthreads();
+
+    if (tid < s) {
+      s_input[tid] = fmaxf(s_input[tid], s_input[tid + s]);
+    }
+  }
+
+  // Multi-block reduction
+  if (tid == 0) {
+    atomicMaxf(output, s_input[0]);
+  }
+}
+// Kernel to normalize the buffer using a max value
+__global__ void normalizeBufferKernel(float* buffer, int size, float maxValue) {
+  int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  
+  if (idx < size && maxValue > 0.0f) {
+    // Ensure all values are clamped between 0 and 1 after normalization
+    buffer[idx] = fminf(1.0f, fmaxf(0.0f, buffer[idx] / maxValue));
+  }
+}
 #endif  // COSMIC_RAY_TRACER_CUDA_CUH

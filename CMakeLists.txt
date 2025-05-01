@@ -155,4 +155,20 @@ if(WITH_CUDA)
     target_compile_definitions(cosmic_cuda PRIVATE 
         PPM_DIR="${DATA_DIR}"
     )
+
+    add_executable(cosmic_cuda_gl src/cosmic_cuda_gl.cu)
+    target_include_directories(cosmic_cuda_gl PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/external
+    )
+    target_link_libraries(cosmic_cuda_gl PRIVATE
+        glad
+        glfw
+        OpenGL::GL
+        OpenMP::OpenMP_CXX
+    )
+    target_compile_definitions(cosmic_cuda_gl PRIVATE 
+        SHADER_DIR="${SHADER_DIR}"
+        PPM_DIR="${DATA_DIR}"
+    )
 endif()

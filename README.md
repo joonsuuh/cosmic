@@ -1,7 +1,18 @@
 # COSMIC OpenGL Spacetime Metric In CUDA (COSMIC)
 
 <!-- INSERT IMAGE/VIDEO HER -->
-![bh_1920x1080](./assets/bh_1080.png "Black Hole with Perlin Noise Hot Colormap")
+![bh_1920x1080](./assets/videos/bh_1080.mp4 "Black Hole with Perlin Noise Hot Colormap")
+
+## Features
+
+- [x] RK45 ODE Solver (Dormand-Prince adaptive step size).
+- [x] Kerr Metric (rotating black hole) using Boyer-Lindquist coordinates.
+- [x] 3 + 1 Formulism Hamiltonian to decompose spacetime into equations of motion for the photon.
+- [x] Doppler boosting & gravitational redshift.
+- [x] OpenMP parallelization on CPU.
+- [X] GPU acceleration with CUDA.
+- [x] Perlin noise for texturing accretion disk.
+- [X] CUDA OpenGL interoperability with PBO buffers.
 
 ## Dependencies
 
@@ -45,6 +56,14 @@ in `build/data`.
 Currently only the CPU implementation is available for command-line compilation. Add execute
 permissions to the bash script with `chmod +x compile.sh` and run it with `./compile.sh`.
 
+
+### FFmpeg Image to Video
+
+Using FFmpeg (`brew install ffmpeg` or download the corresponding linux package), follow these steps to convert the generated frames into a video:
+
+1. Run the CUDA-GL application (`cosmic_cuda_gl`). Frames are saved as PPM images in the `frames/` directory.
+2. `cd` to the `scripts/` directory and add permissions with `chmod +x` to run `./convert_frames_to_video.sh`. Video will be saved in the `assets/videos/`.
+   
 ## References
 
 I don't fully understand every detail of the math/physics behind this project, but these
@@ -61,18 +80,6 @@ and guidance for implementing the original CPU version of the code.
 
 ## TODO:
 
-- [x] explicit RK45 ODE Solver (Dormand-Prince adaptive step size)
-- [x] Kerr Metric (rotating black hole) using Boyer-Lindquist coordinates
-- [x] 3 + 1 Formulism Hamiltonian to decompose spacetime into equations of motion for the photon
-- [x] Doppler boosting & gravitational redshift
-- [x] OpenMP parallelization on CPU
-- [X] OpenGL rendering
-- [X] CUDA accelerated computations
-- [X] CUDA optimizations
-- [ ] CUDA + OpenGL interop
-- [ ] clean up cpu implementation (run opengl on mac/windows?/linux)
-- [ ] add compile script for linux+cuda
-
-Extra TODO:
+- [ ] clean up cpu implementation (set up Windows build)
 - [ ] Metal for macOS??
 - [ ] Vulkan???

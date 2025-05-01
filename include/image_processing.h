@@ -91,6 +91,26 @@ void writeImageToFile(const std::string& filename, float* screenBuffer, int pixe
   outputFile.close();
 }
 
+void writeGLImageToFile(const std::string& filename, float* screenBuffer, int pixelWidth, int pixelHeight) {
+  std::ofstream outputFile(filename);
+  outputFile << "P3\n";
+  outputFile << pixelWidth << " " << pixelHeight << "\n";
+  outputFile << "255\n";
+
+  for (int i = 0; i < pixelHeight; i++) {
+    for (int j = 0; j < pixelWidth; j++) {
+      // Map to 0-255 range
+      unsigned int r = static_cast<unsigned int>(screenBuffer[(i * pixelWidth + j) * 3] * 255.0f);
+      unsigned int g = static_cast<unsigned int>(screenBuffer[(i * pixelWidth + j) * 3 + 1] * 255.0f);
+      unsigned int b = static_cast<unsigned int>(screenBuffer[(i * pixelWidth + j) * 3 + 2] * 255.0f);
+
+      outputFile << r << " " << g << " " << b << " ";
+    }
+    outputFile << "\n";
+  }
+  outputFile.close();
+}
+
 // ===== OUTPUT FUNCTIONS =====
 
 inline void printDisplayResolution(int pixelWidth, int pixelHeight) {

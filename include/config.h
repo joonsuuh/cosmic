@@ -88,6 +88,12 @@ class Image {
     m_offsetY = m_viewportHeight * 0.5f; // - m_stepY * 0.5f;
   }
 
+  // set scale
+  void setScale(float scale) {
+    m_scale = scale;
+    updateImageParams();
+  }
+
   float aspectWidth() const { return m_aspect_width; }
   float aspectHeight() const { return m_aspectHeight; }
   float scale() const { return m_scale; } 
